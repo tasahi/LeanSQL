@@ -1,0 +1,7 @@
+# Mojo build artifacts & caches
+*.mojoc
+*.so
+test_runner
+__pycache__/
+*.db
+*.db-journal
