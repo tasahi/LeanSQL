@@ -16,6 +16,7 @@ from src.opcode import *
 from src.record import encode_record, decode_record
 from src.btree import MemBTree, BTreeCursor
 from src.functions import evaluate_scalar_func, sql_cast
+from src.json import sql_json_extract
 
 # VDBE Step Results
 comptime VDBE_RESULT_ROW = 100
@@ -207,6 +208,22 @@ struct Vdbe(ImplicitlyCopyable, Copyable, Movable):
                     self.set_mem(p3, Value.of_null())
                 else:
                     self.set_mem(p3, Value.of_text(v1.to_string() + v2.to_string()))
+
+            elif op == OP_JSON_EXTRACT:
+                var v1 = self.get_mem(p1)
+                var v2 = self.get_mem(p2)
+                if v1.is_null() or v2.is_null():
+                    self.set_mem(p3, Value.of_null())
+                else:
+                    self.set_mem(p3, sql_json_extract(v1.to_string(), v2.to_string(), False))
+
+            elif op == OP_JSON_EXTRACT_TEXT:
+                var v1 = self.get_mem(p1)
+                var v2 = self.get_mem(p2)
+                if v1.is_null() or v2.is_null():
+                    self.set_mem(p3, Value.of_null())
+                else:
+                    self.set_mem(p3, sql_json_extract(v1.to_string(), v2.to_string(), True))
 
             elif op == OP_EQ:
                 var v1 = self.get_mem(p1)

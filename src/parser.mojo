@@ -107,6 +107,8 @@ from src.tokenizer import (
     TK_FOR,
     TK_EACH,
     TK_ROW,
+    TK_ARROW,
+    TK_ARROW_TEXT,
     TK_END,
     TK_EOF,
 )
@@ -1017,6 +1019,14 @@ def parse_expr_mult(tokens: List[Token], mut pos: Int) raises -> Expr:
             pos += 1
             var right = parse_expr_atom(tokens, pos)
             left = Expr.binary("||", left, right)
+        elif tt == TK_ARROW:
+            pos += 1
+            var right = parse_expr_atom(tokens, pos)
+            left = Expr.binary("->", left, right)
+        elif tt == TK_ARROW_TEXT:
+            pos += 1
+            var right = parse_expr_atom(tokens, pos)
+            left = Expr.binary("->>", left, right)
         else:
             break
     return left^

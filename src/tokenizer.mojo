@@ -106,6 +106,8 @@ comptime TK_AFTER = 222
 comptime TK_FOR = 223
 comptime TK_EACH = 224
 comptime TK_ROW = 225
+comptime TK_ARROW = 226
+comptime TK_ARROW_TEXT = 227
 comptime TK_EOF = 199
 
 
@@ -172,6 +174,14 @@ def tokenize_sql(sql: String) raises -> List[Token]:
         if c == 62 and i + 1 < n and bytes[i + 1] == 61:  # '>='
             tokens.append(Token(TK_GE, ">="))
             i += 2
+            continue
+        if c == 45 and i + 1 < n and bytes[i + 1] == 62:  # '->' or '->>'
+            if i + 2 < n and bytes[i + 2] == 62:  # '->>'
+                tokens.append(Token(TK_ARROW_TEXT, "->>"))
+                i += 3
+            else:
+                tokens.append(Token(TK_ARROW, "->"))
+                i += 2
             continue
 
         # 3. Single-character punctuation / operators

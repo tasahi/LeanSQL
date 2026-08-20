@@ -43,6 +43,7 @@ from src.opcode import *
 from src.vdbe import Vdbe
 from src.btree import MemBTree
 from src.functions import evaluate_scalar_func, sql_cast
+from src.json import sql_json_extract
 from src.utf import nocase_compare
 
 
@@ -192,6 +193,10 @@ def eval_expr_row(
                 return Value.of_int(left.to_int() % idenom)
             elif op == "||":
                 return Value.of_text(left.to_string() + right.to_string())
+            elif op == "->":
+                return sql_json_extract(left.to_string(), right.to_string(), False)
+            elif op == "->>":
+                return sql_json_extract(left.to_string(), right.to_string(), True)
             elif op == "=":
                 if (left.type_tag == SQLITE_INTEGER or left.type_tag == SQLITE_FLOAT) and (right.type_tag == SQLITE_INTEGER or right.type_tag == SQLITE_FLOAT):
                     return Value.of_int(Int64(1 if left.to_float() == right.to_float() else 0))

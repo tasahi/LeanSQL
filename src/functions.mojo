@@ -11,6 +11,7 @@ Implements built-in scalar SQL functions:
 from src.types import *
 from src.row import Value
 from src.utf import nocase_compare
+from src.json import sql_json_extract, sql_json_array_length, sql_json_type, sql_json_valid
 
 
 def is_digit_char(c: UInt8) -> Bool:
@@ -522,5 +523,25 @@ def evaluate_scalar_func(name: String, args: List[Value]) -> Value:
             var max_w = Int(args[2].to_int()) if len(args) >= 3 else 10
             return Value.of_text(fts_snippet(args[0].to_string(), args[1].to_string(), max_w))
         return Value.of_null()
+
+    # --- JSON1 Extension Functions ---
+    elif nocase_compare(name, "JSON_EXTRACT") == 0:
+        if len(args) >= 2 and not args[0].is_null() and not args[1].is_null():
+            return sql_json_extract(args[0].to_string(), args[1].to_string(), True)
+        return Value.of_null()
+    elif nocase_compare(name, "JSON_ARRAY_LENGTH") == 0:
+        if len(args) >= 1 and not args[0].is_null():
+            var path = args[1].to_string() if len(args) >= 2 and not args[1].is_null() else "$"
+            return sql_json_array_length(args[0].to_string(), path)
+        return Value.of_null()
+    elif nocase_compare(name, "JSON_TYPE") == 0:
+        if len(args) >= 1 and not args[0].is_null():
+            var path = args[1].to_string() if len(args) >= 2 and not args[1].is_null() else "$"
+            return sql_json_type(args[0].to_string(), path)
+        return Value.of_null()
+    elif nocase_compare(name, "JSON_VALID") == 0:
+        if len(args) >= 1 and not args[0].is_null():
+            return sql_json_valid(args[0].to_string())
+        return Value.of_int(0)
 
     return Value.of_null()

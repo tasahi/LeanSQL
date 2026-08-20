@@ -34,5 +34,6 @@ from src.opcode import *
 from src.vdbe import Vdbe, VDBE_RESULT_ROW, VDBE_RESULT_DONE, VDBE_RESULT_ERROR
 from src.uast import UASTNode, UASTPool, UAST_PROGRAM, UAST_NAME, UAST_LITERAL_NUM, UAST_LITERAL_STR, UAST_SQL_SELECT, UAST_SQL_INSERT, UAST_SQL_WHERE, UAST_SQL_FROM
 from src.tokenizer import Token, tokenize_sql
-from src.parser import SelectStmt, parse_select, compile_select_to_vdbe
+from src.parser import SelectStmt, parse_select
 from src.optimizer import QueryPlan, PLAN_FULL_SCAN, PLAN_ROWID_SEEK, optimize_where_clause, compile_optimized_select
+from src.json import JsonValue, parse_json, sql_json_extract, sql_json_array_length, sql_json_type, sql_json_valid

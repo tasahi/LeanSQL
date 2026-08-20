@@ -29,6 +29,8 @@ comptime OP_MULTIPLY = 22
 comptime OP_DIVIDE = 23
 comptime OP_REMAINDER = 24
 comptime OP_CONCAT = 25
+comptime OP_JSON_EXTRACT = 26
+comptime OP_JSON_EXTRACT_TEXT = 27
 
 # === Comparison & Conditional Jumps ===
 comptime OP_EQ = 30
