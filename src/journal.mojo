@@ -13,7 +13,7 @@ Implements:
 - Journal record format: (4-byte pgno, page_data[page_size], 4-byte checksum)
 """
 
-from std.memory import UnsafePointer, alloc
+from std.memory import Pointer
 from src.types import *
 from src.vfs import MemFile
 
@@ -39,82 +39,78 @@ struct JournalRecord(ImplicitlyCopyable, Copyable, Movable):
     """ Holds an uncommitted page snapshot for rollback."""
     var pgno: UInt32
     var data: List[UInt8]
+    var checksum: UInt32
 
-    def __init__(out self, pgno: UInt32, data: List[UInt8]):
+    def __init__(out self, pgno: UInt32, data: List[UInt8], checksum: UInt32 = 0):
         self.pgno = pgno
         self.data = data.copy()
+        self.checksum = checksum
 
     def __init__(out self, *, copy: Self):
         self.pgno = copy.pgno
         self.data = copy.data.copy()
+        self.checksum = copy.checksum
 
     def __init__(out self, *, deinit move: Self):
         self.pgno = move.pgno
         self.data = move.data^
+        self.checksum = move.checksum
 
 
-struct Journal(ImplicitlyCopyable, Copyable, Movable):
-    """ Manages rollback journal recording and transaction rollback."""
+struct Journal(Movable):
+    """ Manages rollback journal records for an in-flight transaction."""
     var _records: List[JournalRecord]
-    var _initial_db_size: UInt32
     var _page_size: Int
-    var _mode: Int
+    var _initial_db_size: UInt32
+    var _journal_mode: Int
     var _is_active: Bool
 
     def __init__(out self, page_size: Int = 4096, mode: Int = JOURNAL_MODE_DELETE):
         self._records = List[JournalRecord]()
-        self._initial_db_size = 0
         self._page_size = page_size
-        self._mode = mode
+        self._initial_db_size = 0
+        self._journal_mode = mode
         self._is_active = False
-
-    def __init__(out self, *, copy: Self):
-        self._records = copy._records.copy()
-        self._initial_db_size = copy._initial_db_size
-        self._page_size = copy._page_size
-        self._mode = copy._mode
-        self._is_active = copy._is_active
 
     def __init__(out self, *, deinit move: Self):
         self._records = move._records^
-        self._initial_db_size = move._initial_db_size
         self._page_size = move._page_size
-        self._mode = move._mode
+        self._initial_db_size = move._initial_db_size
+        self._journal_mode = move._journal_mode
         self._is_active = move._is_active
 
-    def begin(mut self, initial_db_size: UInt32):
-        """ Starts a new journal session for a transaction."""
+    def begin_transaction(mut self, db_size: UInt32):
+        """ Starts recording page modifications."""
         self._records = List[JournalRecord]()
-        self._initial_db_size = initial_db_size
+        self._initial_db_size = db_size
         self._is_active = True
 
-    def record_page(mut self, pgno: UInt32, page_data: List[UInt8]):
-        """ Records a page before it is modified for the first time in the transaction."""
-        if not self._is_active or self._mode == JOURNAL_MODE_OFF:
-            return
-        # Check if already journaled in this transaction
-        for i in range(len(self._records)):
-            if self._records[i].pgno == pgno:
-                return
-        self._records.append(JournalRecord(pgno, page_data))
+    def is_active(self) -> Bool:
+        return self._is_active
+
+    def record_count(self) -> Int:
+        return len(self._records)
+
+    def initial_db_size(self) -> UInt32:
+        return self._initial_db_size
 
     def has_page(self, pgno: UInt32) -> Bool:
-        """ Returns True if the page has already been journaled."""
+        """ Returns True if the original version of `pgno` has already been recorded."""
         for i in range(len(self._records)):
             if self._records[i].pgno == pgno:
                 return True
         return False
 
-    def get_page_count(self) -> Int:
-        """ Returns number of pages currently preserved in the journal."""
-        return len(self._records)
-
-    def get_record(self, idx: Int) -> JournalRecord:
-        """ Accesses journaled record at `idx`."""
-        return self._records[idx]
-
-    def initial_db_size(self) -> UInt32:
-        return self._initial_db_size
+    def record_page(mut self, pgno: UInt32, data: List[UInt8]):
+        """ Snapshots the original page content before it is modified."""
+        if not self._is_active:
+            return
+        if not self.has_page(pgno):
+            # Compute a simple 32-bit checksum
+            var cs: UInt32 = 0
+            for i in range(len(data)):
+                cs = (cs * 33) + UInt32(data[i])
+            self._records.append(JournalRecord(pgno, data, cs))
 
     def commit(mut self):
         """ Finalizes transaction by clearing journal records."""
@@ -130,52 +126,48 @@ struct Journal(ImplicitlyCopyable, Copyable, Movable):
 
     def encode_header(self, page_count: Int) -> List[UInt8]:
         """ Serializes 28-byte SQLite Rollback Journal Header."""
-        var p = alloc[UInt8](28)
+        var res = List[UInt8]()
         # 8-byte magic
-        p[0] = UInt8(JOURNAL_MAGIC_0)
-        p[1] = UInt8(JOURNAL_MAGIC_1)
-        p[2] = UInt8(JOURNAL_MAGIC_2)
-        p[3] = UInt8(JOURNAL_MAGIC_3)
-        p[4] = UInt8(JOURNAL_MAGIC_4)
-        p[5] = UInt8(JOURNAL_MAGIC_5)
-        p[6] = UInt8(JOURNAL_MAGIC_6)
-        p[7] = UInt8(JOURNAL_MAGIC_7)
+        res.append(UInt8(JOURNAL_MAGIC_0))
+        res.append(UInt8(JOURNAL_MAGIC_1))
+        res.append(UInt8(JOURNAL_MAGIC_2))
+        res.append(UInt8(JOURNAL_MAGIC_3))
+        res.append(UInt8(JOURNAL_MAGIC_4))
+        res.append(UInt8(JOURNAL_MAGIC_5))
+        res.append(UInt8(JOURNAL_MAGIC_6))
+        res.append(UInt8(JOURNAL_MAGIC_7))
 
         # 4-byte Page count (-1 for unfinalized, or actual count)
         var pc = UInt32(page_count)
-        p[8] = UInt8((pc >> 24) & 0xFF)
-        p[9] = UInt8((pc >> 16) & 0xFF)
-        p[10] = UInt8((pc >> 8) & 0xFF)
-        p[11] = UInt8(pc & 0xFF)
+        res.append(UInt8((pc >> 24) & 0xFF))
+        res.append(UInt8((pc >> 16) & 0xFF))
+        res.append(UInt8((pc >> 8) & 0xFF))
+        res.append(UInt8(pc & 0xFF))
 
         # 4-byte random nonce
-        p[12] = 0x12
-        p[13] = 0x34
-        p[14] = 0x56
-        p[15] = 0x78
+        res.append(0x12)
+        res.append(0x34)
+        res.append(0x56)
+        res.append(0x78)
 
         # 4-byte initial db size
         var init_sz = self._initial_db_size
-        p[16] = UInt8((init_sz >> 24) & 0xFF)
-        p[17] = UInt8((init_sz >> 16) & 0xFF)
-        p[18] = UInt8((init_sz >> 8) & 0xFF)
-        p[19] = UInt8(init_sz & 0xFF)
+        res.append(UInt8((init_sz >> 24) & 0xFF))
+        res.append(UInt8((init_sz >> 16) & 0xFF))
+        res.append(UInt8((init_sz >> 8) & 0xFF))
+        res.append(UInt8(init_sz & 0xFF))
 
         # 4-byte sector size (default 512)
-        p[20] = 0
-        p[21] = 0
-        p[22] = 2
-        p[23] = 0
+        res.append(0)
+        res.append(0)
+        res.append(2)
+        res.append(0)
 
         # 4-byte page size
         var ps = UInt32(self._page_size)
-        p[24] = UInt8((ps >> 24) & 0xFF)
-        p[25] = UInt8((ps >> 16) & 0xFF)
-        p[26] = UInt8((ps >> 8) & 0xFF)
-        p[27] = UInt8(ps & 0xFF)
+        res.append(UInt8((ps >> 24) & 0xFF))
+        res.append(UInt8((ps >> 16) & 0xFF))
+        res.append(UInt8((ps >> 8) & 0xFF))
+        res.append(UInt8(ps & 0xFF))
 
-        var res = List[UInt8]()
-        for i in range(28):
-            res.append(p[i])
-        p.free()
         return res^

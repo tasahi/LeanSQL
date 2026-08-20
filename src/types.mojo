@@ -4,7 +4,7 @@ Corresponds to `sqlite/src/sqlite.h.in` and `sqlite/src/sqliteInt.h`.
 """
 
 from std.ffi import c_char, c_int, c_double
-from std.memory import UnsafePointer
+from std.memory import Pointer
 
 # === SQLite Result Codes ===
 comptime SQLITE_OK = 0          # Successful result
@@ -73,9 +73,9 @@ comptime SQLITE_STATIC_DESTRUCTOR = 0
 comptime SQLITE_TRANSIENT_DESTRUCTOR = -1
 
 # === Opaque C Pointer Aliases ===
-comptime C_Db = UnsafePointer[NoneType, MutAnyOrigin]
-comptime C_Stmt = UnsafePointer[NoneType, MutAnyOrigin]
-comptime C_Char_Ptr = UnsafePointer[c_char, ImmutAnyOrigin]
-comptime C_Char_Mut_Ptr = UnsafePointer[c_char, MutAnyOrigin]
-comptime C_Void_Ptr = UnsafePointer[NoneType, ImmutAnyOrigin]
-comptime C_Void_Mut_Ptr = UnsafePointer[NoneType, MutAnyOrigin]
+comptime C_Db = Pointer[NoneType, MutAnyOrigin]
+comptime C_Stmt = Pointer[NoneType, MutAnyOrigin]
+comptime C_Char_Ptr = Pointer[c_char, ImmutAnyOrigin]
+comptime C_Char_Mut_Ptr = Pointer[c_char, MutAnyOrigin]
+comptime C_Void_Ptr = Pointer[NoneType, ImmutAnyOrigin]
+comptime C_Void_Mut_Ptr = Pointer[NoneType, MutAnyOrigin]

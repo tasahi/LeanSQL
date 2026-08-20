@@ -33,14 +33,17 @@ struct Vector(Copyable, Movable):
 def parse_vector(raw_str: String) -> Vector:
     """Parses a vector from string format like '[0.1, 0.2, 0.3]' or '0.1,0.2,0.3'."""
     var s = String(raw_str.strip())
+    var clean_s: String
     if s.startswith("[") and s.endswith("]"):
-        s = String(s[byte=1 : s.byte_length() - 1].strip())
+        clean_s = String(s[byte=1 : s.byte_length() - 1].strip())
+    else:
+        clean_s = s
     
     var vec = Vector()
-    if s.byte_length() == 0:
+    if clean_s.byte_length() == 0:
         return vec^
 
-    var parts = s.split(",")
+    var parts = clean_s.split(",")
     for i in range(len(parts)):
         var num_str = String(parts[i].strip())
         if num_str.byte_length() > 0:

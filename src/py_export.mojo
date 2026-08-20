@@ -4,7 +4,8 @@ Allows SQLean to be compiled into a native `.so` Python extension module
 exporting `PyInit_sqlean` and callable from standard Python scripts via `import sqlean`.
 """
 
-from std.memory import UnsafePointer, alloc
+from std.ffi import external_call
+from std.memory import Pointer
 from std.python import Python, PythonObject
 from std.python.bindings import PythonModuleBuilder
 from src.types import MutAnyOrigin
@@ -35,9 +36,9 @@ def sqlean_version() raises -> PythonObject:
 def sqlean_open(path_obj: PythonObject) raises -> PythonObject:
     """ Opens a persistent database connection and returns an address handle."""
     var path_str = String(path_obj)
-    var p = alloc[Connection](1)
+    var p = external_call["malloc", Pointer[Connection, MutAnyOrigin], Int](4096)
     var c = connect(path_str)
-    p.init_pointee_move(c^)
+    p.unsafe_write(c^)
     var addr = Int(p)
     return PythonObject(addr)
 
@@ -48,7 +49,7 @@ def sqlean_execute(target_obj: PythonObject, sql_obj: PythonObject) raises -> Py
     var addr = parse_handle_address(target_obj)
 
     if addr != 0:
-        var p = UnsafePointer[Connection, MutAnyOrigin](unsafe_from_address=addr)
+        var p = Pointer[Connection, MutAnyOrigin](unsafe_from_address=addr)
         var cur = p[].cursor()
         cur.execute(sql_str)
         p[].commit()
@@ -70,7 +71,7 @@ def sqlean_fetch_all(target_obj: PythonObject, sql_obj: PythonObject) raises -> 
 
     var rows = List[Row]()
     if addr != 0:
-        var p = UnsafePointer[Connection, MutAnyOrigin](unsafe_from_address=addr)
+        var p = Pointer[Connection, MutAnyOrigin](unsafe_from_address=addr)
         var cur = p[].cursor()
         cur.execute(sql_str)
         rows = cur.fetchall()
@@ -104,7 +105,7 @@ def sqlean_commit(target_obj: PythonObject) raises -> PythonObject:
     """ Commits active transaction."""
     var addr = parse_handle_address(target_obj)
     if addr != 0:
-        var p = UnsafePointer[Connection, MutAnyOrigin](unsafe_from_address=addr)
+        var p = Pointer[Connection, MutAnyOrigin](unsafe_from_address=addr)
         p[].commit()
     return PythonObject(True)
 
@@ -113,10 +114,10 @@ def sqlean_close(target_obj: PythonObject) raises -> PythonObject:
     """ Closes connection handle."""
     var addr = parse_handle_address(target_obj)
     if addr != 0:
-        var p = UnsafePointer[Connection, MutAnyOrigin](unsafe_from_address=addr)
+        var p = Pointer[Connection, MutAnyOrigin](unsafe_from_address=addr)
         p[].close()
-        p.destroy_pointee()
-        p.free()
+        p.unsafe_deinit_pointee()
+        _ = external_call["free", NoneType, Pointer[Connection, MutAnyOrigin]](p)
     return PythonObject(True)
 
 

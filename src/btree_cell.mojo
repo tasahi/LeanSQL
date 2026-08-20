@@ -24,7 +24,7 @@ and whether it is a Leaf or Interior node:
    - payload: bytes[payload_size]
 """
 
-from std.memory import UnsafePointer, alloc
+from std.memory import Pointer
 from src.types import *
 from src.varint import put_varint, get_varint, encode_varint, decode_varint
 
@@ -62,17 +62,17 @@ struct TableLeafCell(ImplicitlyCopyable, Copyable, Movable):
         return res^
 
     @staticmethod
-    def decode(p: UnsafePointer[UInt8, ImmutAnyOrigin]) -> Tuple[TableLeafCell, Int]:
+    def decode[origin: Origin](p: Pointer[UInt8, origin]) -> Tuple[TableLeafCell, Int]:
         """ Deserializes a TableLeafCell from pointer `p`. Returns (cell, bytes_consumed)."""
         var p_len: UInt64 = 0
         var n1 = get_varint(p, p_len)
         var p_rowid: UInt64 = 0
-        var n2 = get_varint(p + n1, p_rowid)
+        var n2 = get_varint(p.unsafe_offset(n1), p_rowid)
 
         var payload_bytes = List[UInt8]()
         var offset = n1 + n2
         for i in range(Int(p_len)):
-            payload_bytes.append(p[offset + i])
+            payload_bytes.append(p[unsafe_offset=offset + i])
 
         var cell = TableLeafCell(Int64(p_rowid), payload_bytes)
         return Tuple(cell^, offset + Int(p_len))
@@ -96,22 +96,23 @@ struct TableInteriorCell(ImplicitlyCopyable, Copyable, Movable):
         self.rowid = move.rowid
 
     def encode(self) -> List[UInt8]:
-        """ Serializes an interior table cell into binary format."""
-        var enc_rowid = encode_varint(UInt64(self.rowid))
+        """ Serializes an interior table cell (4-byte child page + varint rowid)."""
         var res = List[UInt8]()
         res.append(UInt8((self.left_child >> 24) & 0xFF))
         res.append(UInt8((self.left_child >> 16) & 0xFF))
         res.append(UInt8((self.left_child >> 8) & 0xFF))
         res.append(UInt8(self.left_child & 0xFF))
+
+        var enc_rowid = encode_varint(UInt64(self.rowid))
         for i in range(len(enc_rowid)):
             res.append(enc_rowid[i])
         return res^
 
     @staticmethod
-    def decode(p: UnsafePointer[UInt8, ImmutAnyOrigin]) -> Tuple[TableInteriorCell, Int]:
-        """ Deserializes a TableInteriorCell from pointer `p`. Returns (cell, bytes_consumed)."""
-        var lc = (UInt32(p[0]) << 24) | (UInt32(p[1]) << 16) | (UInt32(p[2]) << 8) | UInt32(p[3])
-        var p_rowid: UInt64 = 0
-        var n = get_varint(p + 4, p_rowid)
-        var cell = TableInteriorCell(lc, Int64(p_rowid))
-        return Tuple(cell^, 4 + n)
+    def decode(bytes: List[UInt8]) -> TableInteriorCell:
+        """ Deserializes an interior table cell from a byte buffer."""
+        var left_child = (UInt32(bytes[0]) << 24) | (UInt32(bytes[1]) << 16) | (UInt32(bytes[2]) << 8) | UInt32(bytes[3])
+        var p = bytes.unsafe_ptr().unsafe_offset(4)
+        var rowid_val: UInt64 = 0
+        _ = get_varint(p, rowid_val)
+        return TableInteriorCell(left_child, Int64(rowid_val))

@@ -3,7 +3,7 @@ Corresponds to SQLite3 C ABI data structures and entrypoints.
 """
 
 from std.ffi import c_char, c_int, c_double
-from std.memory import UnsafePointer
+from std.memory import Pointer
 from src.types import *
 from src.connection import connect, Connection, Cursor
 from src.row import Row, Value

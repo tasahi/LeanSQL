@@ -18,7 +18,7 @@ SQLite encodes datatypes and content lengths into integer serial types:
 - N >= 13 (odd): TEXT of length (N-13)/2
 """
 
-from std.memory import UnsafePointer, alloc
+from std.memory import Pointer, bitcast
 from src.types import *
 from src.row import Value
 
@@ -73,7 +73,7 @@ def get_serial_type(val: Value) -> UInt32:
     return 0
 
 
-def encode_value(val: Value, p: UnsafePointer[UInt8, MutAnyOrigin]) -> Int:
+def encode_value[origin: Origin[mut=True]](val: Value, p: Pointer[UInt8, origin]) -> Int:
     """Encodes a Value into binary format at pointer `p`.
     
     Returns the number of bytes written.
@@ -85,75 +85,70 @@ def encode_value(val: Value, p: UnsafePointer[UInt8, MutAnyOrigin]) -> Int:
         if v == 0 or v == 1:
             return 0
         if v >= -128 and v <= 127:
-            p[0] = UInt8(Int(v) & 0xFF)
+            p[unsafe_offset=0] = UInt8(Int(v) & 0xFF)
             return 1
         if v >= -32768 and v <= 32767:
             var uv = UInt16(Int(v) & 0xFFFF)
-            p[0] = UInt8((uv >> 8) & 0xFF)
-            p[1] = UInt8(uv & 0xFF)
+            p[unsafe_offset=0] = UInt8((uv >> 8) & 0xFF)
+            p[unsafe_offset=1] = UInt8(uv & 0xFF)
             return 2
         if v >= -8388608 and v <= 8388607:
             var uv = UInt32(Int(v) & 0xFFFFFF)
-            p[0] = UInt8((uv >> 16) & 0xFF)
-            p[1] = UInt8((uv >> 8) & 0xFF)
-            p[2] = UInt8(uv & 0xFF)
+            p[unsafe_offset=0] = UInt8((uv >> 16) & 0xFF)
+            p[unsafe_offset=1] = UInt8((uv >> 8) & 0xFF)
+            p[unsafe_offset=2] = UInt8(uv & 0xFF)
             return 3
         if v >= -2147483648 and v <= 2147483647:
             var uv = UInt32(Int(v) & 0xFFFFFFFF)
-            p[0] = UInt8((uv >> 24) & 0xFF)
-            p[1] = UInt8((uv >> 16) & 0xFF)
-            p[2] = UInt8((uv >> 8) & 0xFF)
-            p[3] = UInt8(uv & 0xFF)
+            p[unsafe_offset=0] = UInt8((uv >> 24) & 0xFF)
+            p[unsafe_offset=1] = UInt8((uv >> 16) & 0xFF)
+            p[unsafe_offset=2] = UInt8((uv >> 8) & 0xFF)
+            p[unsafe_offset=3] = UInt8(uv & 0xFF)
             return 4
         if v >= -140737488355328 and v <= 140737488355327:
             var uv = UInt64(v) & UInt64(0xFFFFFFFFFFFF)
-            p[0] = UInt8((uv >> 40) & 0xFF)
-            p[1] = UInt8((uv >> 32) & 0xFF)
-            p[2] = UInt8((uv >> 24) & 0xFF)
-            p[3] = UInt8((uv >> 16) & 0xFF)
-            p[4] = UInt8((uv >> 8) & 0xFF)
-            p[5] = UInt8(uv & 0xFF)
+            p[unsafe_offset=0] = UInt8((uv >> 40) & 0xFF)
+            p[unsafe_offset=1] = UInt8((uv >> 32) & 0xFF)
+            p[unsafe_offset=2] = UInt8((uv >> 24) & 0xFF)
+            p[unsafe_offset=3] = UInt8((uv >> 16) & 0xFF)
+            p[unsafe_offset=4] = UInt8((uv >> 8) & 0xFF)
+            p[unsafe_offset=5] = UInt8(uv & 0xFF)
             return 6
         var uv = UInt64(v)
-        p[0] = UInt8((uv >> 56) & 0xFF)
-        p[1] = UInt8((uv >> 48) & 0xFF)
-        p[2] = UInt8((uv >> 40) & 0xFF)
-        p[3] = UInt8((uv >> 32) & 0xFF)
-        p[4] = UInt8((uv >> 24) & 0xFF)
-        p[5] = UInt8((uv >> 16) & 0xFF)
-        p[6] = UInt8((uv >> 8) & 0xFF)
-        p[7] = UInt8(uv & 0xFF)
+        p[unsafe_offset=0] = UInt8((uv >> 56) & 0xFF)
+        p[unsafe_offset=1] = UInt8((uv >> 48) & 0xFF)
+        p[unsafe_offset=2] = UInt8((uv >> 40) & 0xFF)
+        p[unsafe_offset=3] = UInt8((uv >> 32) & 0xFF)
+        p[unsafe_offset=4] = UInt8((uv >> 24) & 0xFF)
+        p[unsafe_offset=5] = UInt8((uv >> 16) & 0xFF)
+        p[unsafe_offset=6] = UInt8((uv >> 8) & 0xFF)
+        p[unsafe_offset=7] = UInt8(uv & 0xFF)
         return 8
 
     if val.type_tag == SQLITE_FLOAT:
         var f = val.float_val
-        var f_buf = alloc[Float64](1)
-        f_buf[0] = f
-        var u64_buf = f_buf.bitcast[UInt64]()
-        var uv = u64_buf[0]
-        f_buf.free()
-
-        p[0] = UInt8((uv >> 56) & 0xFF)
-        p[1] = UInt8((uv >> 48) & 0xFF)
-        p[2] = UInt8((uv >> 40) & 0xFF)
-        p[3] = UInt8((uv >> 32) & 0xFF)
-        p[4] = UInt8((uv >> 24) & 0xFF)
-        p[5] = UInt8((uv >> 16) & 0xFF)
-        p[6] = UInt8((uv >> 8) & 0xFF)
-        p[7] = UInt8(uv & 0xFF)
+        var uv = bitcast[DType.uint64](f)
+        p[unsafe_offset=0] = UInt8((uv >> 56) & 0xFF)
+        p[unsafe_offset=1] = UInt8((uv >> 48) & 0xFF)
+        p[unsafe_offset=2] = UInt8((uv >> 40) & 0xFF)
+        p[unsafe_offset=3] = UInt8((uv >> 32) & 0xFF)
+        p[unsafe_offset=4] = UInt8((uv >> 24) & 0xFF)
+        p[unsafe_offset=5] = UInt8((uv >> 16) & 0xFF)
+        p[unsafe_offset=6] = UInt8((uv >> 8) & 0xFF)
+        p[unsafe_offset=7] = UInt8(uv & 0xFF)
         return 8
 
     if val.type_tag == SQLITE_TEXT:
         var bytes = val.text_val.as_bytes()
         var n = len(bytes)
         for i in range(n):
-            p[i] = bytes[i]
+            p[unsafe_offset=i] = bytes[i]
         return n
 
     return 0
 
 
-def decode_value(serial_type: UInt32, p: UnsafePointer[UInt8, ImmutAnyOrigin]) -> Value:
+def decode_value[origin: Origin](serial_type: UInt32, p: Pointer[UInt8, origin]) -> Value:
     """Deserializes a raw byte buffer at `p` according to `serial_type`."""
     if serial_type == 0 or serial_type == 10 or serial_type == 11:
         return Value.of_null()
@@ -162,40 +157,36 @@ def decode_value(serial_type: UInt32, p: UnsafePointer[UInt8, ImmutAnyOrigin]) -
     if serial_type == 9:
         return Value.of_int(1)
     if serial_type == 1:
-        var b = Int(p[0])
+        var b = Int(p[unsafe_offset=0])
         if (b & 0x80) != 0:
             b -= 0x100
         return Value.of_int(Int64(b))
     if serial_type == 2:
-        var uv = (Int(p[0]) << 8) | Int(p[1])
+        var uv = (Int(p[unsafe_offset=0]) << 8) | Int(p[unsafe_offset=1])
         if (uv & 0x8000) != 0:
             uv -= 0x10000
         return Value.of_int(Int64(uv))
     if serial_type == 3:
-        var uv = (Int(p[0]) << 16) | (Int(p[1]) << 8) | Int(p[2])
+        var uv = (Int(p[unsafe_offset=0]) << 16) | (Int(p[unsafe_offset=1]) << 8) | Int(p[unsafe_offset=2])
         if (uv & 0x800000) != 0:
             uv -= 0x1000000
         return Value.of_int(Int64(uv))
     if serial_type == 4:
-        var uv = (Int(p[0]) << 24) | (Int(p[1]) << 16) | (Int(p[2]) << 8) | Int(p[3])
+        var uv = (Int(p[unsafe_offset=0]) << 24) | (Int(p[unsafe_offset=1]) << 16) | (Int(p[unsafe_offset=2]) << 8) | Int(p[unsafe_offset=3])
         if (uv & 0x80000000) != 0:
             uv -= 0x100000000
         return Value.of_int(Int64(uv))
     if serial_type == 5:
-        var uv = (UInt64(p[0]) << 40) | (UInt64(p[1]) << 32) | (UInt64(p[2]) << 24) | (UInt64(p[3]) << 16) | (UInt64(p[4]) << 8) | UInt64(p[5])
+        var uv = (UInt64(p[unsafe_offset=0]) << 40) | (UInt64(p[unsafe_offset=1]) << 32) | (UInt64(p[unsafe_offset=2]) << 24) | (UInt64(p[unsafe_offset=3]) << 16) | (UInt64(p[unsafe_offset=4]) << 8) | UInt64(p[unsafe_offset=5])
         if (uv & (UInt64(1) << 47)) != 0:
             uv |= UInt64(0xFFFF000000000000)
         return Value.of_int(Int64(uv))
     if serial_type == 6:
-        var uv = (UInt64(p[0]) << 56) | (UInt64(p[1]) << 48) | (UInt64(p[2]) << 40) | (UInt64(p[3]) << 32) | (UInt64(p[4]) << 24) | (UInt64(p[5]) << 16) | (UInt64(p[6]) << 8) | UInt64(p[7])
+        var uv = (UInt64(p[unsafe_offset=0]) << 56) | (UInt64(p[unsafe_offset=1]) << 48) | (UInt64(p[unsafe_offset=2]) << 40) | (UInt64(p[unsafe_offset=3]) << 32) | (UInt64(p[unsafe_offset=4]) << 24) | (UInt64(p[unsafe_offset=5]) << 16) | (UInt64(p[unsafe_offset=6]) << 8) | UInt64(p[unsafe_offset=7])
         return Value.of_int(Int64(uv))
     if serial_type == 7:
-        var uv = (UInt64(p[0]) << 56) | (UInt64(p[1]) << 48) | (UInt64(p[2]) << 40) | (UInt64(p[3]) << 32) | (UInt64(p[4]) << 24) | (UInt64(p[5]) << 16) | (UInt64(p[6]) << 8) | UInt64(p[7])
-        var u64_buf = alloc[UInt64](1)
-        u64_buf[0] = uv
-        var f_buf = u64_buf.bitcast[Float64]()
-        var f_val = f_buf[0]
-        u64_buf.free()
+        var uv = (UInt64(p[unsafe_offset=0]) << 56) | (UInt64(p[unsafe_offset=1]) << 48) | (UInt64(p[unsafe_offset=2]) << 40) | (UInt64(p[unsafe_offset=3]) << 32) | (UInt64(p[unsafe_offset=4]) << 24) | (UInt64(p[unsafe_offset=5]) << 16) | (UInt64(p[unsafe_offset=6]) << 8) | UInt64(p[unsafe_offset=7])
+        var f_val = bitcast[DType.float64](uv)
         return Value.of_float(f_val)
     if serial_type >= 13 and (serial_type % 2 == 1):
         # UTF-8 Text string
@@ -203,20 +194,20 @@ def decode_value(serial_type: UInt32, p: UnsafePointer[UInt8, ImmutAnyOrigin]) -
         var s = String()
         var offset = 0
         while offset < str_len:
-            var b0 = UInt32(p[offset])
+            var b0 = UInt32(p[unsafe_offset=offset])
             if b0 < 0x80:
                 s += chr(Int(b0))
                 offset += 1
             elif (b0 & 0xE0) == 0xC0:
-                var cp = ((b0 & 0x1F) << 6) | (UInt32(p[offset + 1]) & 0x3F)
+                var cp = ((b0 & 0x1F) << 6) | (UInt32(p[unsafe_offset=offset + 1]) & 0x3F)
                 s += chr(Int(cp))
                 offset += 2
             elif (b0 & 0xF0) == 0xE0:
-                var cp = ((b0 & 0x0F) << 12) | ((UInt32(p[offset + 1]) & 0x3F) << 6) | (UInt32(p[offset + 2]) & 0x3F)
+                var cp = ((b0 & 0x0F) << 12) | ((UInt32(p[unsafe_offset=offset + 1]) & 0x3F) << 6) | (UInt32(p[unsafe_offset=offset + 2]) & 0x3F)
                 s += chr(Int(cp))
                 offset += 3
             elif (b0 & 0xF8) == 0xF0:
-                var cp = ((b0 & 0x07) << 18) | ((UInt32(p[offset + 1]) & 0x3F) << 12) | ((UInt32(p[offset + 2]) & 0x3F) << 6) | (UInt32(p[offset + 3]) & 0x3F)
+                var cp = ((b0 & 0x07) << 18) | ((UInt32(p[unsafe_offset=offset + 1]) & 0x3F) << 12) | ((UInt32(p[unsafe_offset=offset + 2]) & 0x3F) << 6) | (UInt32(p[unsafe_offset=offset + 3]) & 0x3F)
                 s += chr(Int(cp))
                 offset += 4
             else:

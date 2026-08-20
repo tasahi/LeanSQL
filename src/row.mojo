@@ -4,7 +4,6 @@ Corresponds to `sqlite3_value_*` in `sqlite/src/vdbemem.c`.
 """
 
 from std.ffi import c_char, c_int, c_double
-from std.memory import UnsafePointer
 from src.types import *
 
 

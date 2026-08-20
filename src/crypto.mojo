@@ -12,8 +12,8 @@ def hex_encode(data: List[UInt8]) -> String:
         var b = Int(data[i])
         var hi = (b >> 4) & 0x0F
         var lo = b & 0x0F
-        out_str += HEX_CHARS[hi]
-        out_str += HEX_CHARS[lo]
+        out_str += HEX_CHARS[byte=hi]
+        out_str += HEX_CHARS[byte=lo]
     return out_str
 
 
@@ -25,8 +25,8 @@ def hex_encode_str(text: String) -> String:
         var byte_val = Int(b[i])
         var hi = (byte_val >> 4) & 0x0F
         var lo = byte_val & 0x0F
-        out_str += HEX_CHARS[hi]
-        out_str += HEX_CHARS[lo]
+        out_str += HEX_CHARS[byte=hi]
+        out_str += HEX_CHARS[byte=lo]
     return out_str
 
 
@@ -81,7 +81,7 @@ def sha256_hash(text: String) -> String:
         var h_val = hashes[h_i]
         for shift_i in range(16):
             var nibble = Int((h_val >> UInt64((15 - shift_i) * 4)) & 0x0F)
-            out_str += HEX_CHARS[nibble]
+            out_str += HEX_CHARS[byte=nibble]
     return out_str
 
 
@@ -99,8 +99,8 @@ def md5_hash(text: String) -> String:
     var out_str = String()
     for shift_i in range(16):
         var nibble0 = Int((h0 >> UInt64((15 - shift_i) * 4)) & 0x0F)
-        out_str += HEX_CHARS[nibble0]
+        out_str += HEX_CHARS[byte=nibble0]
     for shift_i in range(16):
         var nibble1 = Int((h1 >> UInt64((15 - shift_i) * 4)) & 0x0F)
-        out_str += HEX_CHARS[nibble1]
+        out_str += HEX_CHARS[byte=nibble1]
     return out_str

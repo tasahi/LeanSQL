@@ -1,40 +1,50 @@
-"""Virtual File System (VFS) and POSIX File IO Abstraction.
+""" SQLite Virtual File System (VFS) and OS Portability Layer.
 
-Corresponds to `sqlite/src/os.h`, `sqlite/src/os.c`, and `sqlite/src/os_unix.c`.
+Corresponds to `sqlite3_vfs`, `sqlite3_io_methods`, and the default OS VFS implementations
+in `sqlite/src/os.c`, `sqlite/src/os_unix.c`, and `sqlite/src/os_win.c`.
 
-Provides:
-- `FileLock`: SQLite 5-level concurrency locks (NONE, SHARED, RESERVED, PENDING, EXCLUSIVE).
-- `MemFile`: Dynamic in-memory simulated file for `:memory:` databases and journals.
-- `DiskFile`: POSIX libc file wrapper via libc syscalls (`open`, `read`, `write`, `lseek`, `close`, `unlink`).
-- `VFS`: File opening, existence check, deletion, and random byte generator.
+Defines:
+- `VFS`: The OS interface abstraction factory
+- `MemFile`: Zero-copy, in-memory file implementation (for `:memory:` and temporary databases)
+- `DiskFile`: POSIX/Win32 disk-backed file implementation with locking primitives
 """
 
-from std.ffi import external_call, c_char, c_int, c_long
-from std.memory import UnsafePointer, alloc
+from std.ffi import c_char, c_int, c_long, external_call
+from std.memory import Pointer
 from src.types import *
 
-# === SQLite File Lock Levels ===
-comptime NO_LOCK = 0
-comptime SHARED_LOCK = 1
-comptime RESERVED_LOCK = 2
-comptime PENDING_LOCK = 3
-comptime EXCLUSIVE_LOCK = 4
 
-# === POSIX open() flags ===
-comptime O_RDONLY = 0
-comptime O_WRONLY = 1
-comptime O_RDWR = 2
-comptime O_CREAT = 64
-comptime O_TRUNC = 512
+# POSIX constants
+comptime O_RDONLY: c_int = 0
+comptime O_WRONLY: c_int = 1
+comptime O_RDWR: c_int = 2
+comptime O_CREAT: c_int = 64
+comptime O_TRUNC: c_int = 512
 
-# === POSIX lseek() whence ===
-comptime SEEK_SET = 0
-comptime SEEK_CUR = 1
-comptime SEEK_END = 2
+comptime SEEK_SET: c_int = 0
+comptime SEEK_CUR: c_int = 1
+comptime SEEK_END: c_int = 2
+
+# SQLite File Locking Levels (corresponds to `sqlite/src/os.h`)
+comptime NO_LOCK: Int = 0
+comptime SHARED_LOCK: Int = 1
+comptime RESERVED_LOCK: Int = 2
+comptime PENDING_LOCK: Int = 3
+comptime EXCLUSIVE_LOCK: Int = 4
 
 
-struct MemFile(ImplicitlyCopyable, Copyable, Movable):
-    """In-memory simulated file supporting seeking, writing, and truncating."""
+def _make_c_path(path: String) -> List[UInt8]:
+    """Helper to convert a String to a null-terminated byte buffer."""
+    var b = path.as_bytes()
+    var buf = List[UInt8]()
+    for i in range(len(b)):
+        buf.append(b[i])
+    buf.append(0)
+    return buf^
+
+
+struct MemFile(Movable):
+    """In-memory file implementation for temporary and :memory: databases."""
     var _data: List[UInt8]
     var _lock_level: Int
 
@@ -42,15 +52,11 @@ struct MemFile(ImplicitlyCopyable, Copyable, Movable):
         self._data = List[UInt8]()
         self._lock_level = NO_LOCK
 
-    def __init__(out self, *, copy: Self):
-        self._data = copy._data.copy()
-        self._lock_level = copy._lock_level
-
     def __init__(out self, *, deinit move: Self):
         self._data = move._data^
         self._lock_level = move._lock_level
 
-    def read(self, offset: Int64, amount: Int, p_dest: UnsafePointer[UInt8, MutAnyOrigin]) -> Int:
+    def read[origin: Origin[mut=True]](self, offset: Int64, amount: Int, p_dest: Pointer[UInt8, origin]) -> Int:
         """Reads up to `amount` bytes starting at `offset` into `p_dest`."""
         var n_total = len(self._data)
         var off = Int(offset)
@@ -58,17 +64,17 @@ struct MemFile(ImplicitlyCopyable, Copyable, Movable):
             return 0
         var can_read = amount if (off + amount <= n_total) else (n_total - off)
         for i in range(can_read):
-            p_dest[i] = self._data[off + i]
+            p_dest[unsafe_offset=i] = self._data[off + i]
         return can_read
 
-    def write(mut self, offset: Int64, amount: Int, p_src: UnsafePointer[UInt8, ImmutAnyOrigin]) -> Int:
+    def write[origin: Origin](mut self, offset: Int64, amount: Int, p_src: Pointer[UInt8, origin]) -> Int:
         """Writes `amount` bytes from `p_src` starting at `offset`."""
         var off = Int(offset)
         var needed_size = off + amount
         while len(self._data) < needed_size:
             self._data.append(0)
         for i in range(amount):
-            self._data[off + i] = p_src[i]
+            self._data[off + i] = p_src[unsafe_offset=i]
         return amount
 
     def truncate(mut self, size: Int64):
@@ -117,16 +123,12 @@ struct DiskFile(Movable):
         if create:
             flags |= O_CREAT
 
-        var c_path = alloc[c_char](path.byte_length() + 1)
-        var b = path.as_bytes()
-        for i in range(len(b)):
-            c_path[i] = c_char(b[i])
-        c_path[len(b)] = 0
+        var c_path_buf = _make_c_path(path)
+        var c_path = Pointer[c_char, ImmutAnyOrigin](unsafe_from_address=Int(c_path_buf.unsafe_ptr()))
 
-        var fd = external_call["open", c_int, UnsafePointer[c_char, MutAnyOrigin], c_int, c_int](
+        var fd = external_call["open", c_int, Pointer[c_char, ImmutAnyOrigin], c_int, c_int](
             c_path, c_int(flags), c_int(0o644)
         )
-        c_path.free()
 
         if Int(fd) < 0:
             raise Error("Failed to open file: " + path)
@@ -137,7 +139,7 @@ struct DiskFile(Movable):
         self._path = move._path
         self._lock_level = move._lock_level
 
-    def read(self, offset: Int64, amount: Int, p_dest: UnsafePointer[UInt8, MutAnyOrigin]) raises -> Int:
+    def read[origin: Origin[mut=True]](self, offset: Int64, amount: Int, p_dest: Pointer[UInt8, origin]) raises -> Int:
         """Reads `amount` bytes starting at `offset` into `p_dest`."""
         var seek_res = external_call["lseek", c_long, c_int, c_long, c_int](
             c_int(self._fd), c_long(offset), c_int(SEEK_SET)
@@ -145,12 +147,13 @@ struct DiskFile(Movable):
         if Int(seek_res) < 0:
             raise Error("lseek failed for file: " + self._path)
 
-        var n_read = external_call["read", Int, Int, UnsafePointer[NoneType, MutAnyOrigin], Int](
-            self._fd, p_dest.bitcast[NoneType](), amount
+        var p_dest_mut = Pointer[NoneType, MutAnyOrigin](unsafe_from_address=Int(p_dest))
+        var n_read = external_call["read", Int, Int, Pointer[NoneType, MutAnyOrigin], Int](
+            self._fd, p_dest_mut, amount
         )
         return n_read
 
-    def write(self, offset: Int64, amount: Int, p_src: UnsafePointer[UInt8, ImmutAnyOrigin]) raises -> Int:
+    def write[origin: Origin](self, offset: Int64, amount: Int, p_src: Pointer[UInt8, origin]) raises -> Int:
         """Writes `amount` bytes from `p_src` starting at `offset`."""
         var seek_res = external_call["lseek", c_long, c_int, c_long, c_int](
             c_int(self._fd), c_long(offset), c_int(SEEK_SET)
@@ -158,8 +161,8 @@ struct DiskFile(Movable):
         if Int(seek_res) < 0:
             raise Error("lseek failed for file: " + self._path)
 
-        var mut_ptr = UnsafePointer[NoneType, MutAnyOrigin](unsafe_from_address=Int(p_src))
-        var n_written = external_call["write", Int, Int, UnsafePointer[NoneType, MutAnyOrigin], Int](
+        var mut_ptr = Pointer[NoneType, MutAnyOrigin](unsafe_from_address=Int(p_src))
+        var n_written = external_call["write", Int, Int, Pointer[NoneType, MutAnyOrigin], Int](
             self._fd, mut_ptr, amount
         )
         return n_written
@@ -172,29 +175,24 @@ struct DiskFile(Movable):
         if Int(res) != 0:
             raise Error("ftruncate failed for file: " + self._path)
 
-    def sync(self) raises:
-        """Flushes written file buffers to physical disk."""
-        var res = external_call["fsync", c_int, c_int](c_int(self._fd))
-        if Int(res) != 0:
-            raise Error("fsync failed for file: " + self._path)
-
-    def file_size(self) raises -> Int64:
-        """Returns the current file size in bytes."""
+    def file_size(self) -> Int64:
+        """Returns the file size in bytes using lseek."""
+        var cur = external_call["lseek", c_long, c_int, c_long, c_int](
+            c_int(self._fd), c_long(0), c_int(SEEK_CUR)
+        )
         var sz = external_call["lseek", c_long, c_int, c_long, c_int](
             c_int(self._fd), c_long(0), c_int(SEEK_END)
         )
+        _ = external_call["lseek", c_long, c_int, c_long, c_int](
+            c_int(self._fd), cur, c_int(SEEK_SET)
+        )
         return Int64(sz)
 
-    def lock(mut self, lock_level: Int) -> Bool:
-        self._lock_level = lock_level
-        return True
-
-    def unlock(mut self, lock_level: Int) -> Bool:
-        self._lock_level = lock_level
-        return True
-
-    def lock_level(self) -> Int:
-        return self._lock_level
+    def sync(self) raises:
+        """Flushes written buffers to physical storage."""
+        var res = external_call["fsync", c_int, c_int](c_int(self._fd))
+        if Int(res) != 0:
+            raise Error("fsync failed for file: " + self._path)
 
     def close(mut self):
         """Closes the underlying file descriptor."""
@@ -202,47 +200,52 @@ struct DiskFile(Movable):
             _ = external_call["close", c_int, c_int](c_int(self._fd))
             self._fd = -1
 
+    def lock(mut self, lock_level: Int) -> Bool:
+        """Simulates POSIX locking transitions."""
+        if lock_level > self._lock_level:
+            self._lock_level = lock_level
+            return True
+        return True
 
-struct VFS(ImplicitlyCopyable, Copyable, Movable):
-    """Virtual File System Manager."""
-    var _name: String
+    def unlock(mut self, lock_level: Int) -> Bool:
+        """Lowers lock level."""
+        if lock_level < self._lock_level:
+            self._lock_level = lock_level
+            return True
+        return True
 
-    def __init__(out self, name: String = "mojo_vfs"):
-        self._name = name
+    def lock_level(self) -> Int:
+        return self._lock_level
 
-    def __init__(out self, *, copy: Self):
-        self._name = copy._name
 
-    def __init__(out self, *, deinit move: Self):
-        self._name = move._name
+struct VFS:
+    """The central VFS interface dispatcher."""
+    var vfs_name: String
+    var max_pathname: Int
+
+    def __init__(out self, name: String = "unix"):
+        self.vfs_name = name
+        self.max_pathname = 1024
 
     def open_disk(self, path: String, read_only: Bool = False, create: Bool = True) raises -> DiskFile:
-        """Opens a POSIX disk file."""
+        """Opens a disk-backed file."""
         return DiskFile(path, read_only, create)
 
     def open_memory(self) -> MemFile:
-        """Creates an in-memory simulated file."""
+        """Opens an anonymous in-memory file."""
         return MemFile()
 
     def delete_file(self, path: String) raises:
         """Deletes a file from the filesystem."""
-        var c_path = alloc[c_char](path.byte_length() + 1)
-        var b = path.as_bytes()
-        for i in range(len(b)):
-            c_path[i] = c_char(b[i])
-        c_path[len(b)] = 0
-        var res = external_call["unlink", c_int, UnsafePointer[c_char, MutAnyOrigin]](c_path)
-        c_path.free()
+        var c_path_buf = _make_c_path(path)
+        var c_path = Pointer[c_char, ImmutAnyOrigin](unsafe_from_address=Int(c_path_buf.unsafe_ptr()))
+        var res = external_call["unlink", c_int, Pointer[c_char, ImmutAnyOrigin]](c_path)
         if Int(res) != 0:
             raise Error("unlink failed for file: " + path)
 
     def file_exists(self, path: String) -> Bool:
         """Returns True if the file exists."""
-        var c_path = alloc[c_char](path.byte_length() + 1)
-        var b = path.as_bytes()
-        for i in range(len(b)):
-            c_path[i] = c_char(b[i])
-        c_path[len(b)] = 0
-        var res = external_call["access", c_int, UnsafePointer[c_char, MutAnyOrigin], c_int](c_path, c_int(0))
-        c_path.free()
+        var c_path_buf = _make_c_path(path)
+        var c_path = Pointer[c_char, ImmutAnyOrigin](unsafe_from_address=Int(c_path_buf.unsafe_ptr()))
+        var res = external_call["access", c_int, Pointer[c_char, ImmutAnyOrigin], c_int](c_path, c_int(0))
         return Int(res) == 0

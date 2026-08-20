@@ -124,23 +124,6 @@ comptime EXPR_CAST = 9
 comptime EXPR_STAR = 10
 
 
-struct WindowSpec(ImplicitlyCopyable, Copyable, Movable):
-    var partition_by: List[Expr]
-    var order_by: List[Expr]
-
-    def __init__(out self):
-        self.partition_by = List[Expr]()
-        self.order_by = List[Expr]()
-
-    def __init__(out self, *, copy: Self):
-        self.partition_by = copy.partition_by.copy()
-        self.order_by = copy.order_by.copy()
-
-    def __init__(out self, *, deinit move: Self):
-        self.partition_by = move.partition_by^
-        self.order_by = move.order_by^
-
-
 struct Expr(ImplicitlyCopyable, Copyable, Movable):
     """ Represents an expression node in the AST."""
     var kind: Int
@@ -151,7 +134,8 @@ struct Expr(ImplicitlyCopyable, Copyable, Movable):
     var args: List[Expr]
     var is_desc: Bool
     var is_window: Bool
-    var window_spec: List[WindowSpec]
+    var window_partition: List[Expr]
+    var window_order: List[Expr]
 
     def __init__(out self, kind: Int = EXPR_LITERAL):
         self.kind = kind
@@ -162,7 +146,8 @@ struct Expr(ImplicitlyCopyable, Copyable, Movable):
         self.args = List[Expr]()
         self.is_desc = False
         self.is_window = False
-        self.window_spec = List[WindowSpec]()
+        self.window_partition = List[Expr]()
+        self.window_order = List[Expr]()
 
     def __init__(out self, *, copy: Self):
         self.kind = copy.kind
@@ -173,7 +158,8 @@ struct Expr(ImplicitlyCopyable, Copyable, Movable):
         self.args = copy.args.copy()
         self.is_desc = copy.is_desc
         self.is_window = copy.is_window
-        self.window_spec = copy.window_spec.copy()
+        self.window_partition = copy.window_partition.copy()
+        self.window_order = copy.window_order.copy()
 
     def __init__(out self, *, deinit move: Self):
         self.kind = move.kind
@@ -184,7 +170,11 @@ struct Expr(ImplicitlyCopyable, Copyable, Movable):
         self.args = move.args^
         self.is_desc = move.is_desc
         self.is_window = move.is_window
-        self.window_spec = move.window_spec^
+        self.window_partition = move.window_partition^
+        self.window_order = move.window_order^
+
+    def __deinit__(deinit self):
+        pass
 
     def copy(self) -> Expr:
         var res = Expr(self.kind)
@@ -195,7 +185,8 @@ struct Expr(ImplicitlyCopyable, Copyable, Movable):
         res.args = self.args.copy()
         res.is_desc = self.is_desc
         res.is_window = self.is_window
-        res.window_spec = self.window_spec.copy()
+        res.window_partition = self.window_partition.copy()
+        res.window_order = self.window_order.copy()
         return res^
 
     @staticmethod
@@ -322,6 +313,9 @@ struct CTETable(ImplicitlyCopyable, Copyable, Movable):
         self.columns = move.columns^
         self.subquery = move.subquery^
 
+    def __deinit__(deinit self):
+        pass
+
 
 struct SelectStmt(ImplicitlyCopyable, Copyable, Movable):
     var columns: List[SelectColumn]
@@ -399,6 +393,9 @@ struct SelectStmt(ImplicitlyCopyable, Copyable, Movable):
         self.ctes = move.ctes^
         self.is_recursive_cte = move.is_recursive_cte
 
+    def __deinit__(deinit self):
+        pass
+
 
 struct InsertStmt(ImplicitlyCopyable, Copyable, Movable):
     var table_name: String
@@ -423,6 +420,9 @@ struct InsertStmt(ImplicitlyCopyable, Copyable, Movable):
         self.columns = move.columns^
         self.values = move.values^
         self.select_stmt = move.select_stmt^
+
+    def __deinit__(deinit self):
+        pass
 
 
 struct UpdateAssignment(ImplicitlyCopyable, Copyable, Movable):
@@ -462,6 +462,9 @@ struct UpdateStmt(ImplicitlyCopyable, Copyable, Movable):
         self.assignments = move.assignments^
         self.where_expr = move.where_expr^
 
+    def __deinit__(deinit self):
+        pass
+
 
 struct DeleteStmt(ImplicitlyCopyable, Copyable, Movable):
     var table_name: String
@@ -479,6 +482,9 @@ struct DeleteStmt(ImplicitlyCopyable, Copyable, Movable):
         self.table_name = move.table_name^
         self.where_expr = move.where_expr^
 
+    def __deinit__(deinit self):
+        pass
+
 
 struct CreateTableStmt(ImplicitlyCopyable, Copyable, Movable):
     var table_name: String
@@ -495,6 +501,9 @@ struct CreateTableStmt(ImplicitlyCopyable, Copyable, Movable):
     def __init__(out self, *, deinit move: Self):
         self.table_name = move.table_name^
         self.columns = move.columns^
+
+    def __deinit__(deinit self):
+        pass
 
 
 struct CreateIndexStmt(ImplicitlyCopyable, Copyable, Movable):
@@ -521,6 +530,9 @@ struct CreateIndexStmt(ImplicitlyCopyable, Copyable, Movable):
         self.columns = move.columns^
         self.is_unique = move.is_unique
 
+    def __deinit__(deinit self):
+        pass
+
 
 struct DropIndexStmt(ImplicitlyCopyable, Copyable, Movable):
     var index_name: String
@@ -533,6 +545,9 @@ struct DropIndexStmt(ImplicitlyCopyable, Copyable, Movable):
 
     def __init__(out self, *, deinit move: Self):
         self.index_name = move.index_name^
+
+    def __deinit__(deinit self):
+        pass
 
 
 struct TransStmt(ImplicitlyCopyable, Copyable, Movable):
@@ -550,6 +565,9 @@ struct TransStmt(ImplicitlyCopyable, Copyable, Movable):
     def __init__(out self, *, deinit move: Self):
         self.op_type = move.op_type
         self.name = move.name^
+
+    def __deinit__(deinit self):
+        pass
 
 
 comptime STMT_PRAGMA = 10
@@ -586,6 +604,9 @@ struct PragmaStmt(ImplicitlyCopyable, Copyable, Movable):
         self.pragma_val = move.pragma_val^
         self.has_val = move.has_val
 
+    def __deinit__(deinit self):
+        pass
+
 
 struct AlterTableStmt(ImplicitlyCopyable, Copyable, Movable):
     var op_type: Int
@@ -611,6 +632,9 @@ struct AlterTableStmt(ImplicitlyCopyable, Copyable, Movable):
         self.new_name = move.new_name^
         self.column_def = move.column_def^
 
+    def __deinit__(deinit self):
+        pass
+
 
 struct CreateViewStmt(ImplicitlyCopyable, Copyable, Movable):
     var view_name: String
@@ -628,6 +652,9 @@ struct CreateViewStmt(ImplicitlyCopyable, Copyable, Movable):
         self.view_name = move.view_name^
         self.select_stmt = move.select_stmt^
 
+    def __deinit__(deinit self):
+        pass
+
 
 struct DropViewStmt(ImplicitlyCopyable, Copyable, Movable):
     var view_name: String
@@ -640,6 +667,9 @@ struct DropViewStmt(ImplicitlyCopyable, Copyable, Movable):
 
     def __init__(out self, *, deinit move: Self):
         self.view_name = move.view_name^
+
+    def __deinit__(deinit self):
+        pass
 
 
 comptime STMT_CREATE_TRIGGER = 14
@@ -680,6 +710,9 @@ struct CreateTriggerStmt(ImplicitlyCopyable, Copyable, Movable):
         self.table_name = move.table_name^
         self.action_sql = move.action_sql^
 
+    def __deinit__(deinit self):
+        pass
+
 
 struct DropTriggerStmt(ImplicitlyCopyable, Copyable, Movable):
     var name: String
@@ -692,6 +725,9 @@ struct DropTriggerStmt(ImplicitlyCopyable, Copyable, Movable):
 
     def __init__(out self, *, deinit move: Self):
         self.name = move.name^
+
+    def __deinit__(deinit self):
+        pass
 
 
 struct ASTStatement(ImplicitlyCopyable, Copyable, Movable):
@@ -761,6 +797,9 @@ struct ASTStatement(ImplicitlyCopyable, Copyable, Movable):
         self.drop_view_stmt = move.drop_view_stmt^
         self.create_trigger_stmt = move.create_trigger_stmt^
         self.drop_trigger_stmt = move.drop_trigger_stmt^
+
+    def __deinit__(deinit self):
+        pass
 
 
 # === Parser Functions ===
@@ -914,7 +953,7 @@ def parse_expr_atom(tokens: List[Token], mut pos: Int) raises -> Expr:
             # Check for Window function: OVER ( [PARTITION BY ...] [ORDER BY ...] )
             if pos < len(tokens) and tokens[pos].token_type == TK_OVER:
                 pos += 1
-                var win_spec = WindowSpec()
+                fn_e.is_window = True
                 if pos < len(tokens) and tokens[pos].token_type == TK_LP:
                     pos += 1
                     # Check PARTITION BY
@@ -922,10 +961,10 @@ def parse_expr_atom(tokens: List[Token], mut pos: Int) raises -> Expr:
                         pos += 1
                         if pos < len(tokens) and tokens[pos].token_type == TK_BY:
                             pos += 1
-                        win_spec.partition_by.append(parse_expr(tokens, pos))
+                        fn_e.window_partition.append(parse_expr(tokens, pos))
                         while pos < len(tokens) and tokens[pos].token_type == TK_COMMA:
                             pos += 1
-                            win_spec.partition_by.append(parse_expr(tokens, pos))
+                            fn_e.window_partition.append(parse_expr(tokens, pos))
                     # Check ORDER BY
                     if pos < len(tokens) and tokens[pos].token_type == TK_ORDER:
                         pos += 1
@@ -938,7 +977,7 @@ def parse_expr_atom(tokens: List[Token], mut pos: Int) raises -> Expr:
                         elif pos < len(tokens) and tokens[pos].token_type == TK_ASC:
                             ord_e.is_desc = False
                             pos += 1
-                        win_spec.order_by.append(ord_e^)
+                        fn_e.window_order.append(ord_e^)
                         while pos < len(tokens) and tokens[pos].token_type == TK_COMMA:
                             pos += 1
                             var ord_next = parse_expr(tokens, pos)
@@ -948,11 +987,9 @@ def parse_expr_atom(tokens: List[Token], mut pos: Int) raises -> Expr:
                             elif pos < len(tokens) and tokens[pos].token_type == TK_ASC:
                                 ord_next.is_desc = False
                                 pos += 1
-                            win_spec.order_by.append(ord_next^)
+                            fn_e.window_order.append(ord_next^)
                     if pos < len(tokens) and tokens[pos].token_type == TK_RP:
                         pos += 1
-                fn_e.is_window = True
-                fn_e.window_spec.append(win_spec^)
 
             return fn_e^
         return Expr.column(name)

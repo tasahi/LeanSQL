@@ -5,7 +5,7 @@ Python's `sqlite3` interface, backed 100% by native Mojo subsystems without C FF
 Supports multi-table JOINs, Compound queries (UNION/INTERSECT/EXCEPT), and On-Disk persistence.
 """
 
-from std.memory import UnsafePointer, alloc
+from std.memory import Pointer
 from src.types import *
 from src.row import Value, Row
 from src.schema import SchemaCatalog, TableDef, IndexDef, ColumnDef
@@ -111,15 +111,15 @@ struct SavepointSnapshot(ImplicitlyCopyable, Copyable, Movable):
 
 struct Cursor(ImplicitlyCopyable, Copyable, Movable):
     """ Manages iteration over SQL query results and statement execution."""
-    var _conn: UnsafePointer[Connection, MutAnyOrigin]
+    var _conn_addr: Int
     var _rows: List[Row]
     var _idx: Int
     var _col_names: List[String]
     var rowcount: Int
     var lastrowid: Int64
 
-    def __init__(out self, conn: UnsafePointer[Connection, MutAnyOrigin]):
-        self._conn = conn
+    def __init__(out self, conn_addr: Int):
+        self._conn_addr = conn_addr
         self._rows = List[Row]()
         self._idx = 0
         self._col_names = List[String]()
@@ -127,7 +127,7 @@ struct Cursor(ImplicitlyCopyable, Copyable, Movable):
         self.lastrowid = 0
 
     def __init__(out self, *, copy: Self):
-        self._conn = copy._conn
+        self._conn_addr = copy._conn_addr
         self._rows = copy._rows.copy()
         self._idx = copy._idx
         self._col_names = copy._col_names.copy()
@@ -135,27 +135,32 @@ struct Cursor(ImplicitlyCopyable, Copyable, Movable):
         self.lastrowid = copy.lastrowid
 
     def __init__(out self, *, deinit move: Self):
-        self._conn = move._conn
+        self._conn_addr = move._conn_addr
         self._rows = move._rows^
         self._idx = move._idx
         self._col_names = move._col_names^
         self.rowcount = move.rowcount
         self.lastrowid = move.lastrowid
 
+    def _get_conn(self) -> Pointer[Connection, MutAnyOrigin]:
+        return Pointer[Connection, MutAnyOrigin](unsafe_from_address=self._conn_addr)
+
     def execute(mut self, sql: String) raises:
         """ Prepares and executes SQL through the parent Connection."""
         var res_rows = List[Row]()
         var res_cols = List[String]()
-        self._conn[]._execute_internal(sql, res_rows, res_cols)
+        var conn = self._get_conn()
+        conn[]._execute_internal(sql, res_rows, res_cols)
         self._rows = res_rows^
         self._idx = 0
         self._col_names = res_cols^
-        self.rowcount = self._conn[].change_count
-        self.lastrowid = self._conn[].last_rowid
+        self.rowcount = conn[].change_count
+        self.lastrowid = conn[].last_rowid
 
     def execute_params(mut self, sql: String, params: List[Value]) raises:
         """ Prepares SQL with ? parameters and executes."""
-        var bound_sql = self._conn[]._substitute_params(sql, params)
+        var conn = self._get_conn()
+        var bound_sql = conn[]._substitute_params(sql, params)
         self.execute(bound_sql)
 
     def fetchone(mut self) -> Optional[Row]:
@@ -236,8 +241,8 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
 
     def cursor(mut self) -> Cursor:
         """ Creates a new Cursor attached to this Connection."""
-        var ptr = UnsafePointer(to=self)
-        return Cursor(ptr)
+        var ptr = Pointer(to=self)
+        return Cursor(Int(ptr))
 
     def _save_to_disk(self) raises:
         """ Persists schema and all B-tree table records to disk in standard SQLite 3 binary page format."""
@@ -427,19 +432,13 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
                     if ptr_offset + 1 < len(buf):
                         var cell_ptr = (Int(buf[ptr_offset]) << 8) | Int(buf[ptr_offset + 1])
                         if cell_ptr < len(buf):
-                            var p_slice = alloc[UInt8](len(buf) - cell_ptr)
-                            for b in range(len(buf) - cell_ptr):
-                                p_slice[b] = buf[cell_ptr + b]
-                            var immut_slice = UnsafePointer[UInt8, ImmutAnyOrigin](other=p_slice)
-                            var t_cell_res = TableLeafCell.decode(immut_slice)
+                            var t_cell_res = TableLeafCell.decode(buf.unsafe_ptr().unsafe_offset(cell_ptr))
                             var t_cell = t_cell_res[0].copy()
-                            p_slice.free()
 
                             # Unpack sqlite_master record
                             var rec_vals = decode_record(t_cell.payload)
                             if len(rec_vals) >= 5:
                                 var tbl_type = rec_vals[0].to_string()
-                                var tbl_name = rec_vals[1].to_string()
                                 var rootpage = Int(rec_vals[3].to_int())
                                 var sql_ddl = rec_vals[4].to_string()
 
@@ -464,13 +463,8 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
                                                     var u_ptr = (Int(buf[u_ptr_off]) << 8) | Int(buf[u_ptr_off + 1])
                                                     var abs_u_ptr = page_offset + u_ptr
                                                     if abs_u_ptr < len(buf):
-                                                        var u_slice = alloc[UInt8](len(buf) - abs_u_ptr)
-                                                        for b in range(len(buf) - abs_u_ptr):
-                                                            u_slice[b] = buf[abs_u_ptr + b]
-                                                        var immut_u_slice = UnsafePointer[UInt8, ImmutAnyOrigin](other=u_slice)
-                                                        var u_cell_res = TableLeafCell.decode(immut_u_slice)
+                                                        var u_cell_res = TableLeafCell.decode(buf.unsafe_ptr().unsafe_offset(abs_u_ptr))
                                                         var u_cell = u_cell_res[0].copy()
-                                                        u_slice.free()
 
                                                         if u_cell.rowid > max_rid:
                                                             max_rid = u_cell.rowid
@@ -1576,15 +1570,14 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
                 else:
                     for c in range(len(sel.columns)):
                         var col = sel.columns[c]
-                        if col.expr.is_window and len(col.expr.window_spec) > 0:
-                            var w_spec = col.expr.window_spec[0]
+                        if col.expr.is_window:
                             var fn_name = col.expr.func_name
                             
                             # Determine partition boundaries for candidate_rows[r]
                             var p_start = 0
                             var p_end = len(candidate_rows)
-                            if len(w_spec.partition_by) > 0:
-                                var p_expr = w_spec.partition_by[0]
+                            if len(col.expr.window_partition) > 0:
+                                var p_expr = col.expr.window_partition[0]
                                 var cur_p_val = eval_expr_row(p_expr, row, table_col_names)
                                 while p_start < r:
                                     var v_start = eval_expr_row(p_expr, candidate_rows[p_start], table_col_names)

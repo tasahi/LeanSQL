@@ -8,7 +8,7 @@ Implements:
 3. Cell pointer decoding and serialization.
 """
 
-from std.memory import UnsafePointer, alloc
+from std.memory import Pointer
 from src.types import *
 
 # === B-Tree Page Type Flags ===
@@ -112,24 +112,24 @@ struct DbHeader(ImplicitlyCopyable, Copyable, Movable):
         self.sqlite_version_number = move.sqlite_version_number
 
     @staticmethod
-    def read_u16(p: UnsafePointer[UInt8, ImmutAnyOrigin], offset: Int) -> UInt16:
-        return (UInt16(p[offset]) << 8) | UInt16(p[offset + 1])
+    def read_u16(buf: List[UInt8], offset: Int) -> UInt16:
+        return (UInt16(buf[offset]) << 8) | UInt16(buf[offset + 1])
 
     @staticmethod
-    def read_u32(p: UnsafePointer[UInt8, ImmutAnyOrigin], offset: Int) -> UInt32:
-        return (UInt32(p[offset]) << 24) | (UInt32(p[offset + 1]) << 16) | (UInt32(p[offset + 2]) << 8) | UInt32(p[offset + 3])
+    def read_u32(buf: List[UInt8], offset: Int) -> UInt32:
+        return (UInt32(buf[offset]) << 24) | (UInt32(buf[offset + 1]) << 16) | (UInt32(buf[offset + 2]) << 8) | UInt32(buf[offset + 3])
 
     @staticmethod
-    def write_u16(p: UnsafePointer[UInt8, MutAnyOrigin], offset: Int, v: UInt16):
-        p[offset] = UInt8((v >> 8) & 0xFF)
-        p[offset + 1] = UInt8(v & 0xFF)
+    def write_u16(mut buf: List[UInt8], offset: Int, v: UInt16):
+        buf[offset] = UInt8((v >> 8) & 0xFF)
+        buf[offset + 1] = UInt8(v & 0xFF)
 
     @staticmethod
-    def write_u32(p: UnsafePointer[UInt8, MutAnyOrigin], offset: Int, v: UInt32):
-        p[offset] = UInt8((v >> 24) & 0xFF)
-        p[offset + 1] = UInt8((v >> 16) & 0xFF)
-        p[offset + 2] = UInt8((v >> 8) & 0xFF)
-        p[offset + 3] = UInt8(v & 0xFF)
+    def write_u32(mut buf: List[UInt8], offset: Int, v: UInt32):
+        buf[offset] = UInt8((v >> 24) & 0xFF)
+        buf[offset + 1] = UInt8((v >> 16) & 0xFF)
+        buf[offset + 2] = UInt8((v >> 8) & 0xFF)
+        buf[offset + 3] = UInt8(v & 0xFF)
 
     @staticmethod
     def decode(buf: List[UInt8]) raises -> DbHeader:
@@ -137,80 +137,66 @@ struct DbHeader(ImplicitlyCopyable, Copyable, Movable):
         if len(buf) < 100:
             raise Error("DbHeader too short: expected 100 bytes, got " + String(len(buf)))
 
-        var p = alloc[UInt8](100)
-        for i in range(100):
-            p[i] = buf[i]
-
-        var immut_p = UnsafePointer[UInt8, ImmutAnyOrigin](other=p)
-        
         # Verify magic: "SQLite format 3\000"
         var magic_bytes = SQLITE_FILE_HEADER_MAGIC.as_bytes()
         for i in range(16):
-            if p[i] != magic_bytes[i]:
-                p.free()
+            if buf[i] != magic_bytes[i]:
                 raise Error("Invalid SQLite header magic string")
 
         var h = DbHeader()
-        var ps_raw = DbHeader.read_u16(immut_p, 16)
+        var ps_raw = DbHeader.read_u16(buf, 16)
         h.page_size = 65536 if ps_raw == 1 else UInt32(ps_raw)
-        h.write_version = p[18]
-        h.read_version = p[19]
-        h.reserved_space = p[20]
-        h.max_payload_frac = p[21]
-        h.min_payload_frac = p[22]
-        h.leaf_payload_frac = p[23]
-        h.file_change_counter = DbHeader.read_u32(immut_p, 24)
-        h.db_size_pages = DbHeader.read_u32(immut_p, 28)
-        h.first_freelist_page = DbHeader.read_u32(immut_p, 32)
-        h.num_freelist_pages = DbHeader.read_u32(immut_p, 36)
-        h.schema_cookie = DbHeader.read_u32(immut_p, 40)
-        h.schema_format = DbHeader.read_u32(immut_p, 44)
-        h.default_cache_size = DbHeader.read_u32(immut_p, 48)
-        h.user_version = DbHeader.read_u32(immut_p, 60)
-        h.text_encoding = DbHeader.read_u32(immut_p, 56)
-        h.app_id = DbHeader.read_u32(immut_p, 68)
-        h.version_valid_for = DbHeader.read_u32(immut_p, 92)
-        h.sqlite_version_number = DbHeader.read_u32(immut_p, 96)
-
-        p.free()
+        h.write_version = buf[18]
+        h.read_version = buf[19]
+        h.reserved_space = buf[20]
+        h.max_payload_frac = buf[21]
+        h.min_payload_frac = buf[22]
+        h.leaf_payload_frac = buf[23]
+        h.file_change_counter = DbHeader.read_u32(buf, 24)
+        h.db_size_pages = DbHeader.read_u32(buf, 28)
+        h.first_freelist_page = DbHeader.read_u32(buf, 32)
+        h.num_freelist_pages = DbHeader.read_u32(buf, 36)
+        h.schema_cookie = DbHeader.read_u32(buf, 40)
+        h.schema_format = DbHeader.read_u32(buf, 44)
+        h.default_cache_size = DbHeader.read_u32(buf, 48)
+        h.user_version = DbHeader.read_u32(buf, 60)
+        h.text_encoding = DbHeader.read_u32(buf, 56)
+        h.app_id = DbHeader.read_u32(buf, 68)
+        h.version_valid_for = DbHeader.read_u32(buf, 92)
+        h.sqlite_version_number = DbHeader.read_u32(buf, 96)
         return h
 
     def encode(self) -> List[UInt8]:
         """Serializes the database header into 100 bytes."""
-        var p = alloc[UInt8](100)
-        for i in range(100):
-            p[i] = 0
+        var res = List[UInt8]()
+        for _ in range(100):
+            res.append(0)
 
         # Magic
         var magic_bytes = SQLITE_FILE_HEADER_MAGIC.as_bytes()
         for i in range(16):
-            p[i] = magic_bytes[i]
+            res[i] = magic_bytes[i]
 
         var ps_field: UInt16 = 1 if self.page_size == 65536 else UInt16(self.page_size)
-        DbHeader.write_u16(p, 16, ps_field)
-        p[18] = self.write_version
-        p[19] = self.read_version
-        p[20] = self.reserved_space
-        p[21] = self.max_payload_frac
-        p[22] = self.min_payload_frac
-        p[23] = self.leaf_payload_frac
-        DbHeader.write_u32(p, 24, self.file_change_counter)
-        DbHeader.write_u32(p, 28, self.db_size_pages)
-        DbHeader.write_u32(p, 32, self.first_freelist_page)
-        DbHeader.write_u32(p, 36, self.num_freelist_pages)
-        DbHeader.write_u32(p, 40, self.schema_cookie)
-        DbHeader.write_u32(p, 44, self.schema_format)
-        DbHeader.write_u32(p, 48, self.default_cache_size)
-        DbHeader.write_u32(p, 56, self.text_encoding)
-        DbHeader.write_u32(p, 60, self.user_version)
-        DbHeader.write_u32(p, 68, self.app_id)
-        DbHeader.write_u32(p, 92, self.version_valid_for)
-        DbHeader.write_u32(p, 96, self.sqlite_version_number)
-
-        var res = List[UInt8]()
-        for i in range(100):
-            res.append(p[i])
-        p.free()
+        DbHeader.write_u16(res, 16, ps_field)
+        res[18] = self.write_version
+        res[19] = self.read_version
+        res[20] = self.reserved_space
+        res[21] = self.max_payload_frac
+        res[22] = self.min_payload_frac
+        res[23] = self.leaf_payload_frac
+        DbHeader.write_u32(res, 24, self.file_change_counter)
+        DbHeader.write_u32(res, 28, self.db_size_pages)
+        DbHeader.write_u32(res, 32, self.first_freelist_page)
+        DbHeader.write_u32(res, 36, self.num_freelist_pages)
+        DbHeader.write_u32(res, 40, self.schema_cookie)
+        DbHeader.write_u32(res, 44, self.schema_format)
+        DbHeader.write_u32(res, 48, self.default_cache_size)
+        DbHeader.write_u32(res, 56, self.text_encoding)
+        DbHeader.write_u32(res, 60, self.user_version)
+        DbHeader.write_u32(res, 68, self.app_id)
+        DbHeader.write_u32(res, 92, self.version_valid_for)
+        DbHeader.write_u32(res, 96, self.sqlite_version_number)
         return res^
 
 
@@ -256,45 +242,45 @@ struct PageHeader(ImplicitlyCopyable, Copyable, Movable):
         return 8 if self.is_leaf() else 12
 
     @staticmethod
-    def decode(p: UnsafePointer[UInt8, ImmutAnyOrigin], offset: Int) -> PageHeader:
+    def decode(p: Pointer[UInt8, ImmutAnyOrigin], offset: Int) -> PageHeader:
         """Decodes a page header from pointer `p` at `offset`."""
-        var p_hdr = p + offset
-        var pt = p_hdr[0]
+        var p_hdr = p.unsafe_offset(offset)
+        var pt = p_hdr[unsafe_offset=0]
         var h = PageHeader(pt)
-        h.first_freeblock = (UInt16(p_hdr[1]) << 8) | UInt16(p_hdr[2])
-        h.cell_count = (UInt16(p_hdr[3]) << 8) | UInt16(p_hdr[4])
-        h.cell_content_offset = (UInt16(p_hdr[5]) << 8) | UInt16(p_hdr[6])
-        h.fragmented_free_bytes = p_hdr[7]
+        h.first_freeblock = (UInt16(p_hdr[unsafe_offset=1]) << 8) | UInt16(p_hdr[unsafe_offset=2])
+        h.cell_count = (UInt16(p_hdr[unsafe_offset=3]) << 8) | UInt16(p_hdr[unsafe_offset=4])
+        h.cell_content_offset = (UInt16(p_hdr[unsafe_offset=5]) << 8) | UInt16(p_hdr[unsafe_offset=6])
+        h.fragmented_free_bytes = p_hdr[unsafe_offset=7]
         if not h.is_leaf():
-            h.right_child_page = (UInt32(p_hdr[8]) << 24) | (UInt32(p_hdr[9]) << 16) | (UInt32(p_hdr[10]) << 8) | UInt32(p_hdr[11])
+            h.right_child_page = (UInt32(p_hdr[unsafe_offset=8]) << 24) | (UInt32(p_hdr[unsafe_offset=9]) << 16) | (UInt32(p_hdr[unsafe_offset=10]) << 8) | UInt32(p_hdr[unsafe_offset=11])
         return h
 
-    def encode(self, p: UnsafePointer[UInt8, MutAnyOrigin], offset: Int) -> Int:
+    def encode(self, p: Pointer[UInt8, MutAnyOrigin], offset: Int) -> Int:
         """Encodes this page header into `p` at `offset`. Returns bytes written."""
-        var p_hdr = p + offset
-        p_hdr[0] = self.page_type
-        p_hdr[1] = UInt8((self.first_freeblock >> 8) & 0xFF)
-        p_hdr[2] = UInt8(self.first_freeblock & 0xFF)
-        p_hdr[3] = UInt8((self.cell_count >> 8) & 0xFF)
-        p_hdr[4] = UInt8(self.cell_count & 0xFF)
-        p_hdr[5] = UInt8((self.cell_content_offset >> 8) & 0xFF)
-        p_hdr[6] = UInt8(self.cell_content_offset & 0xFF)
-        p_hdr[7] = self.fragmented_free_bytes
+        var p_hdr = p.unsafe_offset(offset)
+        p_hdr[unsafe_offset=0] = self.page_type
+        p_hdr[unsafe_offset=1] = UInt8((self.first_freeblock >> 8) & 0xFF)
+        p_hdr[unsafe_offset=2] = UInt8(self.first_freeblock & 0xFF)
+        p_hdr[unsafe_offset=3] = UInt8((self.cell_count >> 8) & 0xFF)
+        p_hdr[unsafe_offset=4] = UInt8(self.cell_count & 0xFF)
+        p_hdr[unsafe_offset=5] = UInt8((self.cell_content_offset >> 8) & 0xFF)
+        p_hdr[unsafe_offset=6] = UInt8(self.cell_content_offset & 0xFF)
+        p_hdr[unsafe_offset=7] = self.fragmented_free_bytes
         if not self.is_leaf():
-            p_hdr[8] = UInt8((self.right_child_page >> 24) & 0xFF)
-            p_hdr[9] = UInt8((self.right_child_page >> 16) & 0xFF)
-            p_hdr[10] = UInt8((self.right_child_page >> 8) & 0xFF)
-            p_hdr[11] = UInt8(self.right_child_page & 0xFF)
+            p_hdr[unsafe_offset=8] = UInt8((self.right_child_page >> 24) & 0xFF)
+            p_hdr[unsafe_offset=9] = UInt8((self.right_child_page >> 16) & 0xFF)
+            p_hdr[unsafe_offset=10] = UInt8((self.right_child_page >> 8) & 0xFF)
+            p_hdr[unsafe_offset=11] = UInt8(self.right_child_page & 0xFF)
             return 12
         return 8
 
 
-def read_cell_pointer(p: UnsafePointer[UInt8, ImmutAnyOrigin], ptr_offset: Int) -> UInt16:
+def read_cell_pointer(p: Pointer[UInt8, ImmutAnyOrigin], ptr_offset: Int) -> UInt16:
     """Reads a 2-byte big-endian cell pointer offset."""
-    return (UInt16(p[ptr_offset]) << 8) | UInt16(p[ptr_offset + 1])
+    return (UInt16(p[unsafe_offset=ptr_offset]) << 8) | UInt16(p[unsafe_offset=ptr_offset + 1])
 
 
-def write_cell_pointer(p: UnsafePointer[UInt8, MutAnyOrigin], ptr_offset: Int, cell_offset: UInt16):
+def write_cell_pointer(p: Pointer[UInt8, MutAnyOrigin], ptr_offset: Int, cell_offset: UInt16):
     """Writes a 2-byte big-endian cell pointer offset."""
-    p[ptr_offset] = UInt8((cell_offset >> 8) & 0xFF)
-    p[ptr_offset + 1] = UInt8(cell_offset & 0xFF)
+    p[unsafe_offset=ptr_offset] = UInt8((cell_offset >> 8) & 0xFF)
+    p[unsafe_offset=ptr_offset + 1] = UInt8(cell_offset & 0xFF)

@@ -1,12 +1,12 @@
-"""SQLite Page Cache and Pager Transaction State Machine.
+""" SQLite ACID Pager Subsystem.
 
-Corresponds to `sqlite/src/pager.h` and `sqlite/src/pager.c`.
+Corresponds to `sqlite/src/pager.c` and `sqlite/src/pcache.c`.
 
 Implements:
-- `DbPage`: Reference-counted in-memory database page.
-- `PCache`: LRU page cache for fast lookups and dirty page tracking.
-- `PagerState`: State machine transitions:
-  - `PAGER_OPEN`: Clean state, no locks held.
+- `Page`: Fixed-size page buffer with dirty tracking.
+- `PCache`: LRU / hash-indexed in-memory page cache.
+- `PagerState`: State machine tracking transaction transitions:
+  - `PAGER_OPEN`: No transaction active, NO_LOCK.
   - `PAGER_READER`: Read-only transaction, SHARED lock held.
   - `PAGER_WRITER_LOCKED`: RESERVED lock held, pages read.
   - `PAGER_WRITER_CACHED`: Modified pages recorded in journal.
@@ -14,7 +14,7 @@ Implements:
 - `Pager`: ACID page manager handling page retrieval, dirty writes, commit, and rollback.
 """
 
-from std.memory import UnsafePointer, alloc
+from std.memory import Pointer
 from src.types import *
 from src.vfs import MemFile, NO_LOCK, SHARED_LOCK, RESERVED_LOCK, EXCLUSIVE_LOCK
 from src.journal import Journal, JournalRecord, JOURNAL_MODE_DELETE, JOURNAL_MODE_MEMORY
@@ -28,8 +28,8 @@ comptime PAGER_WRITER_DBMOD = 4
 comptime PAGER_ERROR = 5
 
 
-struct DbPage(ImplicitlyCopyable, Copyable, Movable):
-    """ An individual database page in memory."""
+struct Page(ImplicitlyCopyable, Copyable, Movable):
+    """Represents a single fixed-size SQLite B-Tree database page in memory."""
     var pgno: UInt32
     var data: List[UInt8]
     var is_dirty: Bool
@@ -40,11 +40,6 @@ struct DbPage(ImplicitlyCopyable, Copyable, Movable):
         for _ in range(page_size):
             self.data.append(0)
         self.is_dirty = False
-
-    def __init__(out self, pgno: UInt32, data: List[UInt8], is_dirty: Bool = False):
-        self.pgno = pgno
-        self.data = data.copy()
-        self.is_dirty = is_dirty
 
     def __init__(out self, *, copy: Self):
         self.pgno = copy.pgno
@@ -57,181 +52,165 @@ struct DbPage(ImplicitlyCopyable, Copyable, Movable):
         self.is_dirty = move.is_dirty
 
 
-struct PCache(ImplicitlyCopyable, Copyable, Movable):
-    """ In-memory page cache."""
-    var _pages: List[DbPage]
+struct PCache(Movable):
+    """In-memory page cache managing loaded and dirty pages."""
+    var _pages: List[Page]
     var _page_size: Int
+    var _max_pages: Int
 
-    def __init__(out self, page_size: Int = 4096):
-        self._pages = List[DbPage]()
+    def __init__(out self, page_size: Int, max_pages: Int = 100):
+        self._pages = List[Page]()
         self._page_size = page_size
-
-    def __init__(out self, *, copy: Self):
-        self._pages = copy._pages.copy()
-        self._page_size = copy._page_size
+        self._max_pages = max_pages
 
     def __init__(out self, *, deinit move: Self):
         self._pages = move._pages^
         self._page_size = move._page_size
+        self._max_pages = move._max_pages
 
-    def get(self, pgno: UInt32) -> Optional[DbPage]:
-        """ Finds a page by page number in cache."""
+    def get(self, pgno: UInt32) -> Optional[Page]:
+        """Finds a cached page by pgno."""
         for i in range(len(self._pages)):
             if self._pages[i].pgno == pgno:
-                return Optional(self._pages[i].copy())
+                return self._pages[i].copy()
         return None
 
-    def put(mut self, page: DbPage):
-        """ Inserts or updates a page in the cache."""
+    def put(mut self, page: Page):
+        """Inserts or updates a page in the cache."""
         for i in range(len(self._pages)):
             if self._pages[i].pgno == page.pgno:
                 self._pages[i] = page.copy()
                 return
         self._pages.append(page.copy())
 
-    def clear(mut self):
-        """ Clears all cached pages."""
-        self._pages = List[DbPage]()
+    def mark_dirty(mut self, pgno: UInt32):
+        """Marks a cached page as dirty."""
+        for i in range(len(self._pages)):
+            if self._pages[i].pgno == pgno:
+                self._pages[i].is_dirty = True
+                return
 
-    def dirty_pages(self) -> List[DbPage]:
-        """ Returns all pages marked as dirty."""
-        var dirty = List[DbPage]()
+    def dirty_pages(self) -> List[Page]:
+        """Returns all currently dirty pages in the cache."""
+        var res = List[Page]()
         for i in range(len(self._pages)):
             if self._pages[i].is_dirty:
-                dirty.append(self._pages[i].copy())
-        return dirty^
+                res.append(self._pages[i].copy())
+        return res^
 
     def mark_all_clean(mut self):
-        """ Marks all cached pages as clean."""
+        """Marks all cached pages as clean."""
         for i in range(len(self._pages)):
             self._pages[i].is_dirty = False
 
+    def clear(mut self):
+        """Clears all cached pages."""
+        self._pages = List[Page]()
 
-struct Pager(ImplicitlyCopyable, Copyable, Movable):
-    """ Page-level storage manager implementing ACID transactions."""
+
+struct Pager(Movable):
+    """SQLite ACID Pager coordinating transactions, caching, locking, and disk I/O."""
     var _file: MemFile
-    var _journal: Journal
     var _pcache: PCache
+    var _journal: Journal
     var _page_size: Int
-    var _db_size_pages: UInt32
     var _state: Int
-    var _path: String
+    var _db_size_pages: UInt32
 
-    def __init__(out self, path: String = ":memory:", page_size: Int = 4096):
-        self._file = MemFile()
-        self._journal = Journal(page_size)
+    def __init__(out self, mut file: MemFile, page_size: Int = 4096):
+        self._file = file^
         self._pcache = PCache(page_size)
+        self._journal = Journal(page_size)
         self._page_size = page_size
-        self._db_size_pages = 0
         self._state = PAGER_OPEN
-        self._path = path
-
-    def __init__(out self, *, copy: Self):
-        self._file = copy._file.copy()
-        self._journal = copy._journal.copy()
-        self._pcache = copy._pcache.copy()
-        self._page_size = copy._page_size
-        self._db_size_pages = copy._db_size_pages
-        self._state = copy._state
-        self._path = copy._path
+        self._db_size_pages = 0
 
     def __init__(out self, *, deinit move: Self):
         self._file = move._file^
-        self._journal = move._journal^
         self._pcache = move._pcache^
+        self._journal = move._journal^
         self._page_size = move._page_size
-        self._db_size_pages = move._db_size_pages
         self._state = move._state
-        self._path = move._path
+        self._db_size_pages = move._db_size_pages
 
     def page_size(self) -> Int:
         return self._page_size
 
-    def page_count(self) -> UInt32:
-        return self._db_size_pages
-
     def state(self) -> Int:
         return self._state
 
-    def acquire_page(mut self, pgno: UInt32) raises -> DbPage:
-        """ Retrieves page `pgno` from cache or loads it from storage."""
-        if pgno < 1:
-            raise Error("Invalid page number: " + String(pgno))
+    def db_size(self) -> UInt32:
+        return self._db_size_pages
 
-        # Check cache
+    def read_page(mut self, pgno: UInt32) raises -> Page:
+        """Retrieves a page by number, reading from disk if not cached."""
+        # 1. Check cache first
         var cached = self._pcache.get(pgno)
         if cached:
-            return cached.value()
+            return cached.value()^
 
-        # Load from file
-        var p = alloc[UInt8](self._page_size)
+        # 2. Allocate and read from underlying file
+        var page = Page(pgno, self._page_size)
         var offset = Int64(pgno - 1) * Int64(self._page_size)
-        var n_read = self._file.read(offset, self._page_size, p)
+        
+        var mut_ptr = Pointer[UInt8, MutAnyOrigin](unsafe_from_address=Int(page.data.unsafe_ptr()))
+        _ = self._file.read(offset, self._page_size, mut_ptr)
 
-        var page_data = List[UInt8]()
-        for i in range(self._page_size):
-            if i < n_read:
-                page_data.append(p[i])
-            else:
-                page_data.append(0)
-        p.free()
-
-        var page = DbPage(pgno, page_data, False)
-        self._pcache.put(page)
+        self._pcache.put(page.copy())
         return page^
 
-    def write_page(mut self, mut page: DbPage) raises:
-        """ Marks a page as dirty and records its pre-image into the rollback journal."""
+    def write_page(mut self, mut page: Page) raises:
+        """Marks a page for writing, taking journal snapshot if necessary."""
         if self._state == PAGER_OPEN or self._state == PAGER_READER:
-            self.begin_transaction()
+            self.begin_write()
 
-        # Record pre-image before first modification in this transaction
+        # If page not yet preserved in journal for this transaction, snapshot original
         if not self._journal.has_page(page.pgno):
-            # Load original from file/clean state
-            var p_orig = alloc[UInt8](self._page_size)
-            var offset = Int64(page.pgno - 1) * Int64(self._page_size)
-            var n_read = self._file.read(offset, self._page_size, p_orig)
-            var orig_data = List[UInt8]()
-            for i in range(self._page_size):
-                if i < n_read:
-                    orig_data.append(p_orig[i])
-                else:
-                    orig_data.append(0)
-            p_orig.free()
-            self._journal.record_page(page.pgno, orig_data)
+            var orig_cached = self._pcache.get(page.pgno)
+            if orig_cached:
+                self._journal.record_page(page.pgno, orig_cached.value().data)
+            else:
+                self._journal.record_page(page.pgno, page.data)
 
         page.is_dirty = True
         self._pcache.put(page)
         if page.pgno > self._db_size_pages:
             self._db_size_pages = page.pgno
 
-    def begin_transaction(mut self):
-        """ Starts a write transaction with a journal session."""
-        if self._state == PAGER_WRITER_LOCKED or self._state == PAGER_WRITER_CACHED:
+    def begin_read(mut self) raises:
+        """Transitions to PAGER_READER under SHARED lock."""
+        if self._state != PAGER_OPEN:
             return
-        _ = self._file.lock(RESERVED_LOCK)
-        self._journal.begin(self._db_size_pages)
-        self._state = PAGER_WRITER_LOCKED
+        if not self._file.lock(SHARED_LOCK):
+            raise Error("Failed to acquire SHARED lock on database")
+        self._state = PAGER_READER
+
+    def begin_write(mut self) raises:
+        """Transitions to PAGER_WRITER_LOCKED under RESERVED lock."""
+        if self._state == PAGER_OPEN:
+            self.begin_read()
+        if self._state == PAGER_READER:
+            if not self._file.lock(RESERVED_LOCK):
+                raise Error("Failed to acquire RESERVED lock on database")
+            self._state = PAGER_WRITER_LOCKED
+            self._journal.begin_transaction(self._db_size_pages)
 
     def commit(mut self) raises:
-        """ Flushes all dirty pages to storage and finalizes the transaction."""
-        if self._state != PAGER_WRITER_LOCKED and self._state != PAGER_WRITER_CACHED:
+        """Flushes dirty pages, finalizes journal, and releases locks."""
+        if self._state != PAGER_WRITER_LOCKED and self._state != PAGER_WRITER_CACHED and self._state != PAGER_WRITER_DBMOD:
             return
 
-        _ = self._file.lock(EXCLUSIVE_LOCK)
+        # Elevate to EXCLUSIVE lock before writing to database
+        if not self._file.lock(EXCLUSIVE_LOCK):
+            raise Error("Failed to acquire EXCLUSIVE lock on database for commit")
         self._state = PAGER_WRITER_DBMOD
 
-        # Flush dirty pages to file
+        # Flush dirty pages
         var dirty = self._pcache.dirty_pages()
-        var p_buf = alloc[UInt8](self._page_size)
         for i in range(len(dirty)):
             var d_page = dirty[i]
-            for j in range(self._page_size):
-                p_buf[j] = d_page.data[j]
             var offset = Int64(d_page.pgno - 1) * Int64(self._page_size)
-            var immut_p = UnsafePointer[UInt8, ImmutAnyOrigin](other=p_buf)
-            _ = self._file.write(offset, self._page_size, immut_p)
-        p_buf.free()
+            _ = self._file.write(offset, self._page_size, d_page.data.unsafe_ptr())
 
         # Finalize journal and clean cache
         self._journal.commit()
@@ -245,15 +224,10 @@ struct Pager(ImplicitlyCopyable, Copyable, Movable):
             return
 
         var orig_records = self._journal.rollback()
-        var p_buf = alloc[UInt8](self._page_size)
         for i in range(len(orig_records)):
             var rec = orig_records[i]
-            for j in range(self._page_size):
-                p_buf[j] = rec.data[j]
             var offset = Int64(rec.pgno - 1) * Int64(self._page_size)
-            var immut_p = UnsafePointer[UInt8, ImmutAnyOrigin](other=p_buf)
-            _ = self._file.write(offset, self._page_size, immut_p)
-        p_buf.free()
+            _ = self._file.write(offset, self._page_size, rec.data.unsafe_ptr())
 
         # Restore db size and clear dirty cache
         self._db_size_pages = self._journal.initial_db_size()

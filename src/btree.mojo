@@ -7,7 +7,6 @@ Implements:
 - `BTreeCursor`: Forward and backward row scanner (`first`, `next`, `seek_rowid`, `is_valid`, `get_rowid`, `get_payload`).
 """
 
-from std.memory import UnsafePointer, alloc
 from src.types import *
 from src.btree_cell import TableLeafCell, TableInteriorCell
 from src.row import Value
