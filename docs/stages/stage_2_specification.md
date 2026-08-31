@@ -1,6 +1,6 @@
 # Stage 2 Specification: Storage Serialization, Record Format & Page Layout
 
-This document provides the architectural and algorithmic specification for **Stage 2** of the SQLean (SQLite in Mojo) transcription project.
+This document provides the architectural and algorithmic specification for **Stage 2** of the LeanSQL (SQLite in Mojo) transcription project.
 
 ---
 
@@ -102,15 +102,15 @@ A single data record in SQLite is encoded as:
 
 ## 5. Implementation Files to Create in Stage 2
 
-1. [`src/serial.mojo`](./src/serial.mojo):
+1. [`src/storage/serial.mojo`](./src/storage/serial.mojo):
    - `serial_type_len(serial_type: UInt32) -> Int`
    - `get_serial_type(val: Value) -> UInt32`
    - `encode_value(val: Value, p: UnsafePointer[UInt8, MutAnyOrigin]) -> Int`
    - `decode_value(serial_type: UInt32, p: UnsafePointer[UInt8, ImmutAnyOrigin]) -> Value`
-2. [`src/record.mojo`](./src/record.mojo):
+2. [`src/storage/record.mojo`](./src/storage/record.mojo):
    - `encode_record(values: List[Value]) -> List[UInt8]`
    - `decode_record(payload: List[UInt8]) -> List[Value]`
-3. [`src/page_header.mojo`](./src/page_header.mojo):
+3. [`src/storage/page_header.mojo`](./src/storage/page_header.mojo):
    - `DbHeader`: 100-byte file header parser and serializer.
    - `PageHeader`: 8/12-byte B-tree page header codec for all 4 page types.
 4. Stage 2 Test Suites (`tests/`):

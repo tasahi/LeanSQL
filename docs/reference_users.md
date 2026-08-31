@@ -1,6 +1,6 @@
-# SQLean: User's Reference Manual
+# LeanSQL: User's Reference Manual
 
-The **SQLean** user manual provides full syntax specifications, built-in functions, dot commands, and usage guides for the 100% pure-Mojo database engine.
+The **LeanSQL** user manual provides full syntax specifications, built-in functions, dot commands, and usage guides for the 100% pure-Mojo database engine.
 
 ---
 
@@ -8,7 +8,7 @@ The **SQLean** user manual provides full syntax specifications, built-in functio
 
 Launch the interactive shell:
 ```bash
-mojo run sqlean.mojo [database_file.db]
+mojo run leansql.mojo [database_file.db]
 ```
 
 ### Supported Dot Commands
@@ -105,7 +105,7 @@ DROP TRIGGER trg_audit;
 
 ---
 
-## 3. SQLean Extension Functions
+## 3. LeanSQL Extension Functions
 
 ### A. Full-Text Search (FTS) & BM25
 - `fts_match(text, query)`: Returns `1` if all terms in `query` match `text`, else `0`.

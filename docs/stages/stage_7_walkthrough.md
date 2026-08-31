@@ -59,7 +59,7 @@ Stage 7 completes the pure Mojo SQLite transcription roadmap by implementing the
 
 ## Implemented Components
 
-### 1. WhereScan Query Planner ([`src/optimizer.mojo`](../src/optimizer.mojo))
+### 1. WhereScan Query Planner ([`src/sql/optimizer.mojo`](../src/sql/optimizer.mojo))
 - **`QueryPlan`**: Tracks chosen execution strategy:
   - `PLAN_FULL_SCAN`: Iterates all cells via `OP_REWIND` and `OP_NEXT`.
   - `PLAN_ROWID_SEEK`: Optimized $O(\log N)$ point seek via `OP_SEEK_ROWID`.

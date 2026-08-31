@@ -49,11 +49,11 @@ Stage 4 translates SQLite's B-Tree storage engine, cell serialization structures
 
 ## Implemented Components
 
-### 1. B-Tree Cell Codecs ([`src/btree_cell.mojo`](../src/btree_cell.mojo))
+### 1. B-Tree Cell Codecs ([`src/storage/btree_cell.mojo`](../src/storage/btree_cell.mojo))
 - **`TableLeafCell`**: Serializes and deserializes SQLite table leaf cells (`[payload_size: varint, rowid: varint, payload: bytes]`).
 - **`TableInteriorCell`**: Serializes and deserializes branch pointer cells (`[left_child_page: 4-byte big-endian, rowid: varint]`).
 
-### 2. B-Tree Table Engine & Cursor ([`src/btree.mojo`](../src/btree.mojo))
+### 2. B-Tree Table Engine & Cursor ([`src/storage/btree.mojo`](../src/storage/btree.mojo))
 - **`MemBTree`**: Key-value table index engine storing records in ascending 64-bit integer `rowid` order.
   - `insert(rowid, payload)`: Inserts new rows at exact sorted position (or updates existing key).
   - `delete(rowid)`: Removes records by primary rowid.

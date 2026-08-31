@@ -45,18 +45,18 @@ Stage 3 translates SQLite's Virtual File System (VFS), POSIX OS file layer, page
 
 ## Implemented Components
 
-### 1. Virtual File System & OS Layer ([`src/vfs.mojo`](../src/vfs.mojo))
+### 1. Virtual File System & OS Layer ([`src/vfs/vfs_os.mojo`](../src/vfs/vfs_os.mojo))
 - **`FileLock`**: SQLite 5-level concurrency locks (`NO_LOCK`, `SHARED_LOCK`, `RESERVED_LOCK`, `PENDING_LOCK`, `EXCLUSIVE_LOCK`).
 - **`MemFile`**: In-memory dynamic file simulator for `:memory:` databases, temporary files, and in-memory rollback journals.
 - **`DiskFile`**: Direct POSIX filesystem abstraction using libc syscalls (`open`, `read`, `write`, `lseek`, `ftruncate`, `fsync`, `close`).
 - **`VFS`**: Manager for opening disk/memory files, checking file existence, and deleting files.
 
-### 2. Rollback Journal Engine ([`src/journal.mojo`](../src/journal.mojo))
+### 2. Rollback Journal Engine ([`src/vfs/journal.mojo`](../src/vfs/journal.mojo))
 - **`Journal`**: Pre-image recorder storing unmodified pages prior to in-place mutation.
 - **`JournalHeader`**: 28-byte SQLite Rollback Journal Header codec with magic bytes `0xd9d505f920a163d7`, page counts, checksum seeds, and sector sizes.
 - **`rollback()` & `commit()`**: Restores original pages upon abort or frees journal records upon commit.
 
-### 3. Pager Subsystem & Page Cache ([`src/pager.mojo`](../src/pager.mojo))
+### 3. Pager Subsystem & Page Cache ([`src/vfs/pager.mojo`](../src/vfs/pager.mojo))
 - **`DbPage`**: In-memory page representation (`pgno`, `data: List[UInt8]`, `is_dirty`).
 - **`PCache`**: LRU page cache for fast lookups and dirty page management.
 - **`Pager`**: Complete ACID transaction manager:

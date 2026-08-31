@@ -39,7 +39,7 @@ Stage 2 translates SQLite's core storage serialization engines into pure Mojo 1.
 
 ## Implemented Components
 
-### 1. Serial Type Codecs ([`src/serial.mojo`](../src/serial.mojo))
+### 1. Serial Type Codecs ([`src/storage/serial.mojo`](../src/storage/serial.mojo))
 - **`serial_type_len`**: Calculates binary byte size for SQLite serial types $0..14+$.
 - **`get_serial_type`**: Maps a `Value` to the most compact representation:
   - Int 0 $\implies$ Type 8 (0 bytes)
@@ -54,11 +54,11 @@ Stage 2 translates SQLite's core storage serialization engines into pure Mojo 1.
   - Text $\implies$ Type $13 + 2N$ ($N$ bytes)
 - **`encode_value` & `decode_value`**: Big-endian binary serialization and deserialization.
 
-### 2. Record Format Engine ([`src/record.mojo`](../src/record.mojo))
+### 2. Record Format Engine ([`src/storage/record.mojo`](../src/storage/record.mojo))
 - **`encode_record`**: Serializes heterogeneous rows into SQLite payload records (`[header_size_varint, st1_varint, st2_varint, ..., val1_bytes, val2_bytes, ...]`).
 - **`decode_record`**: Deserializes raw payloads back into lists of typed `Value` cells.
 
-### 3. Database File Header & B-Tree Page Headers ([`src/page_header.mojo`](../src/page_header.mojo))
+### 3. Database File Header & B-Tree Page Headers ([`src/storage/page_header.mojo`](../src/storage/page_header.mojo))
 - **`DbHeader`**: Encodes and decodes the 100-byte SQLite database header at offset 0 of page 1 (`"SQLite format 3\000"`, page sizes $512$–$65536$, change counters, schema cookies).
 - **`PageHeader`**: 8-byte leaf and 12-byte interior page header codecs across all 4 page types:
   - `0x02` (`PAGE_TYPE_INTERIOR_INDEX`)

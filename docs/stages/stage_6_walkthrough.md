@@ -57,11 +57,11 @@ Stage 6 translates SQLite's SQL lexical scanner (`tokenize.c`), statement gramma
 
 ## Implemented Components
 
-### 1. SQL Tokenizer ([`src/tokenizer.mojo`](../src/tokenizer.mojo))
+### 1. SQL Tokenizer ([`src/sql/tokenizer.mojo`](../src/sql/tokenizer.mojo))
 - **`Token`**: Token representation with type symbol (`TK_SELECT`, `TK_FROM`, `TK_WHERE`, `TK_ID`, `TK_INTEGER`, `TK_STRING`, `TK_STAR`, `TK_EQ`, `TK_COMMA`, `TK_EOF`) and text slice.
 - **`tokenize_sql(sql: String)`**: Converts raw SQL statement strings into structured token sequences.
 
-### 2. SQL Parser & Bytecode Compiler ([`src/parser.mojo`](../src/parser.mojo))
+### 2. SQL Parser & Bytecode Compiler ([`src/sql/parser.mojo`](../src/sql/parser.mojo))
 - **`SelectStmt`**: Abstract Syntax Tree (AST) node storing projection columns, table targets, and where clauses.
 - **`parse_select(tokens: List[Token])`**: Parses statement token streams into `SelectStmt` AST nodes.
 - **`compile_select_to_vdbe(stmt: SelectStmt, table_btree_idx: Int)`**: Compiles AST into an executable `Vdbe` bytecode program (`OP_OPEN_READ`, `OP_REWIND`, `OP_COLUMN`, `OP_RESULT_ROW`, `OP_NEXT`, `OP_CLOSE`, `OP_HALT`).

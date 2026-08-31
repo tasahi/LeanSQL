@@ -53,7 +53,7 @@ Stage 5 translates SQLite's Virtual Database Engine (VDBE), bytecode instruction
 
 ## Implemented Components
 
-### 1. VDBE Opcode Instruction Set ([`src/opcode.mojo`](../src/opcode.mojo))
+### 1. VDBE Opcode Instruction Set ([`src/vdbe/opcode.mojo`](../src/vdbe/opcode.mojo))
 - **`Opcode`**: 5-operand bytecode structure (`op`, `p1`, `p2`, `p3`, `p4_str`, `p5`).
 - **Core Instruction Families**:
   - Control Flow: `OP_INIT`, `OP_GOTO`, `OP_HALT`.
@@ -62,7 +62,7 @@ Stage 5 translates SQLite's Virtual Database Engine (VDBE), bytecode instruction
   - Table Cursor Operations: `OP_OPEN_READ`, `OP_OPEN_WRITE`, `OP_REWIND`, `OP_NEXT`, `OP_ROWID`, `OP_COLUMN`, `OP_CLOSE`.
   - Output & Records: `OP_MAKE_RECORD`, `OP_INSERT`, `OP_RESULT_ROW`.
 
-### 2. VDBE Virtual Machine Interpreter ([`src/vdbe.mojo`](../src/vdbe.mojo))
+### 2. VDBE Virtual Machine Interpreter ([`src/vdbe/vm.mojo`](../src/vdbe/vm.mojo))
 - **`Vdbe`**:
   - `_mem`: Register memory cells holding dynamically-typed `Value`s.
   - `_cursors`: Virtual slots managing active `BTreeCursor` iterators.

@@ -1,24 +1,24 @@
-# Native Python C-Extension Module Export (`sqlean.so`)
+# Native Python C-Extension Module Export (`leansql.so`)
 
-SQLean can be built directly into a standard Python native C-extension shared library (`sqlean.so`) using Mojo's `PythonModuleBuilder` and exported `PyInit_sqlean` ABI entrypoint.
+LeanSQL can be built directly into a standard Python native C-extension shared library (`leansql.so`) using Mojo's `PythonModuleBuilder` and exported `PyInit_leansql` ABI entrypoint.
 
 ---
 
-## 1. Mojo Export Source ([`src/py_export.mojo`](../src/py_export.mojo))
+## 1. Mojo Export Source ([`src/interop/py_export.mojo`](../src/interop/py_export.mojo))
 
 ```mojo
 from std.python import PythonObject
 from std.python.bindings import PythonModuleBuilder
-from src.connection import connect
-from src.row import Value, Row
+from src.engine.connection import connect
+from src.engine.row import Value, Row
 
 
-def sqlean_version() raises -> PythonObject:
-    """ Returns the version of SQLean."""
-    return PythonObject("SQLean 0.1.0 (Mojo + SQLite Engine)")
+def leansql_version() raises -> PythonObject:
+    """ Returns the version of LeanSQL."""
+    return PythonObject("LeanSQL 0.1.0 (Mojo + SQLite Engine)")
 
 
-def sqlean_count(path_obj: PythonObject, table_obj: PythonObject) raises -> PythonObject:
+def leansql_count(path_obj: PythonObject, table_obj: PythonObject) raises -> PythonObject:
     """ Executes SELECT COUNT(*) from the given table and returns integer count."""
     var db_path = String(path_obj)
     var table_name = String(table_obj)
@@ -37,7 +37,7 @@ def sqlean_count(path_obj: PythonObject, table_obj: PythonObject) raises -> Pyth
     return PythonObject(count)
 
 
-def sqlean_query(path_obj: PythonObject, sql_obj: PythonObject) raises -> PythonObject:
+def leansql_query(path_obj: PythonObject, sql_obj: PythonObject) raises -> PythonObject:
     """ Connects to SQLite database at `path_obj`, executes `sql_obj`, and returns formatted lines."""
     var path_str = String(path_obj)
     var sql_str = String(sql_obj)
@@ -69,13 +69,13 @@ def sqlean_query(path_obj: PythonObject, sql_obj: PythonObject) raises -> Python
 
 
 @export
-def PyInit_sqlean() abi("C") -> PythonObject:
-    """ Initializes the native Python C-extension module 'sqlean'."""
+def PyInit_leansql() abi("C") -> PythonObject:
+    """ Initializes the native Python C-extension module 'leansql'."""
     try:
-        var mb = PythonModuleBuilder("sqlean")
-        mb.def_function[sqlean_version]("version", "Returns SQLean version string")
-        mb.def_function[sqlean_count]("execute_count", "Returns integer row count for a table")
-        mb.def_function[sqlean_query]("execute_query", "Executes SQL query and returns formatted rows as string")
+        var mb = PythonModuleBuilder("leansql")
+        mb.def_function[leansql_version]("version", "Returns LeanSQL version string")
+        mb.def_function[leansql_count]("execute_count", "Returns integer row count for a table")
+        mb.def_function[leansql_query]("execute_query", "Executes SQL query and returns formatted rows as string")
         return mb.finalize()
     except:
         return PythonObject()
@@ -89,28 +89,28 @@ To compile the shared object library:
 
 ```bash
 source /home/tasahi/miniconda/bin/activate moj
-mojo build --emit shared-lib -I . -Xlinker -L/home/tasahi/miniconda/envs/moj/lib -Xlinker -lsqlite3 src/py_export.mojo -o sqlean.so
+mojo build --emit shared-lib -I . -Xlinker -L/home/tasahi/miniconda/envs/moj/lib -Xlinker -lsqlite3 src/interop/py_export.mojo -o leansql.so
 ```
 
 ---
 
 ## 3. Direct Python Usage Example
 
-You can import and use `sqlean` directly in any Python 3 script or REPL:
+You can import and use `leansql` directly in any Python 3 script or REPL:
 
 ```python
-import sqlean
+import leansql
 
 # 1. Check version
-print(sqlean.version())
-# Output: SQLean 0.1.0 (Mojo + SQLite Engine)
+print(leansql.version())
+# Output: LeanSQL 0.1.0 (Mojo + SQLite Engine)
 
 # 2. Execute COUNT query directly from Python
-count = sqlean.execute_count("/mnt/c/Documents/Programming/CMStrA/data/cmstra.db", "rag_chunks")
+count = leansql.execute_count("/mnt/c/Documents/Programming/CMStrA/data/cmstra.db", "rag_chunks")
 print(f"Total chunks: {count}")
 # Output: Total chunks: 1638
 
 # 3. Execute arbitrary SQL query returning formatted data
-result = sqlean.execute_query("/mnt/c/Documents/Programming/CMStrA/data/cmstra.db", "SELECT id, title FROM navigation_items LIMIT 3")
+result = leansql.execute_query("/mnt/c/Documents/Programming/CMStrA/data/cmstra.db", "SELECT id, title FROM navigation_items LIMIT 3")
 print(result)
 ```

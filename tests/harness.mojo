@@ -1,8 +1,8 @@
-"""Standard Test Harness for SQLean / SQLite compatibility test suites.
+"""Standard Test Harness for LeanSQL / SQLite compatibility test suites.
 """
 
-from src.connection import connect, Connection
-from src.row import Value, Row
+from src.engine.connection import connect, Connection
+from src.engine.row import Value, Row
 
 
 struct TestHarness:

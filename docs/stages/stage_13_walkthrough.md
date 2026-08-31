@@ -1,18 +1,18 @@
-# Stage 13 Walkthrough: SQLean Extensions Ecosystem (Full-Text Search FTS, SIMD Vector Search & Similarity, and Extended Math/Crypto)
+# Stage 13 Walkthrough: LeanSQL Extensions Ecosystem (Full-Text Search FTS, SIMD Vector Search & Similarity, and Extended Math/Crypto)
 
-Stage 13 introduces the modern **SQLean Extension Ecosystem** into the 100% pure-Mojo database engine: Full-Text Search (FTS) with BM25 relevance ranking, native AI Vector Embeddings with SIMD distance metrics, and mathematical & cryptographic extension functions.
+Stage 13 introduces the modern **LeanSQL Extension Ecosystem** into the 100% pure-Mojo database engine: Full-Text Search (FTS) with BM25 relevance ranking, native AI Vector Embeddings with SIMD distance metrics, and mathematical & cryptographic extension functions.
 
 ---
 
 ## 1. Accomplishments in Stage 13
 
-1. **Full-Text Search (FTS) Engine & BM25 Scoring (`src/fts.mojo`)**:
+1. **Full-Text Search (FTS) Engine & BM25 Scoring (`src/ext/fts.mojo`)**:
    - Built a tokenization pipeline for case-folded alphanumeric tokens.
    - Implemented multi-term `fts_match(text, query)` pattern matching.
    - Built BM25 term frequency / inverse document frequency ranking algorithm (`compute_bm25_score()`).
    - Implemented keyword highlighting (`fts_highlight()` / `highlight()`) and keyword-centered context window generation (`fts_snippet()` / `snippet()`).
 
-2. **SIMD Vector Embeddings & Similarity Search (`src/vector.mojo`)**:
+2. **SIMD Vector Embeddings & Similarity Search (`src/ext/vector.mojo`)**:
    - Implemented float vector array parsing and serialization (`Vector`, `parse_vector`).
    - Built high-performance vector distance and similarity kernels:
      - `vec_dot_product(v1, v2)`: Vector dot product.
@@ -21,7 +21,7 @@ Stage 13 introduces the modern **SQLean Extension Ecosystem** into the 100% pure
      - `vec_dims(v)`: Dimension inspection.
    - Integrated KNN nearest neighbor ordering in SQL `ORDER BY vec_distance_cosine(embedding, ?) ASC`.
 
-3. **Extended Math & Cryptographic Functions (`src/crypto.mojo` & `src/functions.mojo`)**:
+3. **Extended Math & Cryptographic Functions (`src/ext/crypto.mojo` & `src/engine/functions.mojo`)**:
    - **Math**: `sqrt`, `pow`/`power`, `log`, `log10`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `degrees`, `radians`, `ceil`, `floor`, `trunc`, `pi`, `sign`.
    - **Crypto & Encodings**: `md5(text)`, `sha256(text)`, `hex(str)`, `unhex(hex_str)`.
 
@@ -32,7 +32,7 @@ Stage 13 introduces the modern **SQLean Extension Ecosystem** into the 100% pure
 
 ---
 
-## 2. Complete SQLean Test Suite Matrix (24 Suites)
+## 2. Complete LeanSQL Test Suite Matrix (24 Suites)
 
 | Suite | Description | File | Assertions | Status |
 | :--- | :--- | :--- | :--- | :--- |
@@ -56,8 +56,8 @@ Stage 13 introduces the modern **SQLean Extension Ecosystem** into the 100% pure
 | **18** | Database Triggers | `test_suite_18_triggers.mojo` | 11 | **PASS** |
 | **19** | Interactive CLI Shell & Dot Commands | `test_suite_19_cli.mojo` | 12 | **PASS** |
 | **20** | Complete C-ABI Export | `test_suite_20_c_abi.mojo` | 17 | **PASS** |
-| **21** | Python DB-API Driver Verification | `test_sqlean_python_driver.py` | 5 | **PASS** |
+| **21** | Python DB-API Driver Verification | `test_leansql_python_driver.py` | 5 | **PASS** |
 | **22** | Full-Text Search (FTS) & BM25 Scoring | `test_suite_22_fts.mojo` | 13 | **PASS** |
 | **23** | SIMD Vector Search & Cosine Similarity | `test_suite_23_vector.mojo` | 11 | **PASS** |
 | **24** | Extended Math & Cryptographic Built-ins | `test_suite_24_math_crypto.mojo` | 18 | **PASS** |
-| **TOTAL** | **Full SQLean Test Suite (100% Pure Mojo)** | `tests/run_tests.sh` | **340 / 340** | **100% PASS** |
+| **TOTAL** | **Full LeanSQL Test Suite (100% Pure Mojo)** | `tests/run_tests.sh` | **340 / 340** | **100% PASS** |

@@ -1,14 +1,14 @@
 # Universal Abstract Syntax Tree (UAST) Integration & Specification
 
-This document describes the alignment between **SQLean** and the **Unimo** (`/mnt/c/Documents/Mojo/unimo`) unified multi-language abstract syntax tree project.
+This document describes the alignment between **LeanSQL** and the **Unimo** (`/mnt/c/Documents/Mojo/unimo`) unified multi-language abstract syntax tree project.
 
 ---
 
 ## 1. Tag & Token Mapping to Unimo
 
-SQLean adopts Unimo's Universal AST node representation (`UASTNode`, `UASTPool`) without altering Unimo's existing source code. Where applicable, standard programming language concepts reuse Unimo's core AST tags, while database/SQL-domain constructs are mapped into reserved extension tags ($100..112$):
+LeanSQL adopts Unimo's Universal AST node representation (`UASTNode`, `UASTPool`) without altering Unimo's existing source code. Where applicable, standard programming language concepts reuse Unimo's core AST tags, while database/SQL-domain constructs are mapped into reserved extension tags ($100..112$):
 
-| Construct | SQLean Token Symbol | Unimo AST Equivalent Tag | Numeric Value | Description |
+| Construct | LeanSQL Token Symbol | Unimo AST Equivalent Tag | Numeric Value | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | **Identifier / Column Name** | `TK_ID` | `UAST_NAME` | `11` | Variable / column / table name identifier |
 | **Integer Literal** | `TK_INTEGER` | `UAST_LITERAL_NUM` | `15` | Numeric constant |
@@ -27,12 +27,12 @@ SQLean adopts Unimo's Universal AST node representation (`UASTNode`, `UASTPool`)
 
 ## 2. UAST Structure & Pool Memory Management
 
-In SQLean, AST trees can be serialized into a flat `UASTPool` allocator:
+In LeanSQL, AST trees can be serialized into a flat `UASTPool` allocator:
 
 ```mojo
-from src.uast import UASTPool, UASTNode, UAST_SQL_SELECT, UAST_SQL_FROM, UAST_SQL_WHERE, UAST_NAME, UAST_LITERAL_NUM
-from src.parser import parse_select
-from src.tokenizer import tokenize_sql
+from src.sql.uast import UASTPool, UASTNode, UAST_SQL_SELECT, UAST_SQL_FROM, UAST_SQL_WHERE, UAST_NAME, UAST_LITERAL_NUM
+from src.sql.parser import parse_select
+from src.sql.tokenizer import tokenize_sql
 
 # Parse SQL into AST and serialize to Unimo UAST
 var tokens = tokenize_sql("SELECT id, name FROM users WHERE id = 42")
@@ -50,7 +50,7 @@ var root_node = pool.get(root_idx)
 The test suite [`tests/test_uast.mojo`](../tests/test_uast.mojo) validates the UAST translation:
 
 ```
-=== Testing Unimo Universal AST Compatibility for SQLean ===
+=== Testing Unimo Universal AST Compatibility for LeanSQL ===
   Root node kind: UAST_SQL_SELECT (100)
   Columns: id (11), name (11)
   From: users (107)

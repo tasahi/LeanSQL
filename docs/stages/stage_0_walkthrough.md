@@ -27,7 +27,7 @@ The source code is organized in [`src`](../src):
 
 ## Key Modules Implemented
 
-### 1. High-Level Pythonic API ([`connection.mojo`](../src/connection.mojo), [`cursor.mojo`](../src/cursor.mojo))
+### 1. High-Level Pythonic API ([`connection.mojo`](../src/engine/connection.mojo), [`cursor.mojo`](../src/engine/cursor.mojo))
 - **`sqlite3.connect(database: String) raises -> Connection`**: Opens in-memory or on-disk databases.
 - **`Cursor.execute(sql: String)`**: Compiles SQL statements and steps through execution.
 - **`Cursor.execute_params(sql: String, params: List[Value])`**: Safely binds parameters with proper type dispatch and memory management.
@@ -35,12 +35,12 @@ The source code is organized in [`src`](../src):
 - **`Cursor.fetchall() raises -> List[Row]`**: Fetches all remaining rows.
 - **`Connection.commit()` & `Connection.rollback()`**: Manages transactions with automatic SQLite autocommit state inspection.
 
-### 2. Value & Row Representation ([`row.mojo`](../src/row.mojo))
+### 2. Value & Row Representation ([`row.mojo`](../src/engine/row.mojo))
 - `Value` implements `ImplicitlyCopyable`, `Copyable`, and `Movable` conforming to Mojo 1.0 memory semantics.
 - Factory constructors: `Value.of_int()`, `Value.of_float()`, `Value.of_text()`, `Value.of_null()`.
 - Accessors: `row.get_int(i)`, `row.get_float(i)`, `row.get_string(i)`, `row.is_null(i)`.
 
-### 3. C-FFI Interop Layer ([`c_api.mojo`](../src/c_api.mojo))
+### 3. C-FFI Interop Layer ([`c_api.mojo`](../src/interop/c_api.mojo))
 - High-performance direct calls via `std.ffi.external_call` without overhead.
 - Safe dynamic memory allocation via `std.memory.alloc`.
 - Linked dynamically to `libsqlite3.so` in `/home/tasahi/miniconda/envs/moj/lib`.

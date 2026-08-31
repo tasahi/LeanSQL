@@ -33,21 +33,21 @@ Stage 1 has translated SQLite's fundamental leaf primitives into pure Mojo 1.0. 
 
 ## Implemented Primitives
 
-### 1. Varint Codecs ([`src/varint.mojo`](../src/varint.mojo))
+### 1. Varint Codecs ([`src/core/varint.mojo`](../src/core/varint.mojo))
 - **`put_varint` / `put_varint64`**: Full 1–9 byte encoding matching SQLite `sqlite3PutVarint`.
 - **`get_varint`**: 1–9 byte decoding with bit-cancellation logic matching `sqlite3GetVarint`.
 - **`get_varint32` & `put_varint32`**: Fast paths for 32-bit integers.
 - **`encode_varint` & `decode_varint`**: High-level helpers returning `List[UInt8]` / `Tuple[UInt64, Int]`.
 
-### 2. UTF Codecs & Collation ([`src/utf.mojo`](../src/utf.mojo))
+### 2. UTF Codecs & Collation ([`src/core/utf.mojo`](../src/core/utf.mojo))
 - **`write_utf8` & `read_utf8`**: Encodes/decodes 1 to 4 byte UTF-8 codepoints (including ASCII, Latin, CJK, and SMP emojis).
 - **`utf8_char_length`**: Computes character count by skipping continuation bytes (`(b & 0xC0) == 0x80`).
 - **`nocase_compare`**: SQLite-compatible case-insensitive ASCII comparison.
 
-### 3. String Hash ([`src/hash.mojo`](../src/hash.mojo))
+### 3. String Hash ([`src/core/hash.mojo`](../src/core/hash.mojo))
 - **`str_hash`**: Knuth multiplicative hash (`h = (h + (0xDF & c)) * 0x9E3779B1`) used by SQLite for identifier lookup tables.
 
-### 4. BitVector ([`src/bitvec.mojo`](../src/bitvec.mojo))
+### 4. BitVector ([`src/core/bitvec.mojo`](../src/core/bitvec.mojo))
 - **`BitVec`**: Dynamic bitset with word-aligned bit operations (`set`, `get`, `clear`, `size`).
 
 ---

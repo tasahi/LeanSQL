@@ -1,10 +1,10 @@
-# Stage 10 Walkthrough: PRAGMA Engine, Schema Evolution DDL (`ALTER TABLE`), Views, and Native Python C-Extension Export (`sqlean.so`)
+# Stage 10 Walkthrough: PRAGMA Engine, Schema Evolution DDL (`ALTER TABLE`), Views, and Native Python C-Extension Export (`leansql.so`)
 
 ## Overview
 
 Stage 10 introduces advanced schema management, schema evolution capabilities, runtime database introspection via `PRAGMA` and `sqlite_master`, and direct native Python C-extension export via Mojo's `PythonModuleBuilder`.
 
-SQLean remains **100% pure Mojo** with zero external C dependencies, yet can now be imported directly into standard Python 3 applications via `import sqlean`.
+LeanSQL remains **100% pure Mojo** with zero external C dependencies, yet can now be imported directly into standard Python 3 applications via `import leansql`.
 
 ---
 
@@ -36,32 +36,32 @@ SQLean remains **100% pure Mojo** with zero external C dependencies, yet can now
 - **`CREATE VIEW <view_name> AS SELECT ...` / `DROP VIEW <view_name>`**:
   Supports virtual view creation and removal.
 
-### 3. Native Python C-Extension Shared Library (`sqlean.so`)
-- Exported ABI entrypoint: `@export def PyInit_sqlean() abi("C") -> PythonObject`.
+### 3. Native Python C-Extension Shared Library (`leansql.so`)
+- Exported ABI entrypoint: `@export def PyInit_leansql() abi("C") -> PythonObject`.
 - Module functions exposed via `PythonModuleBuilder`:
-  - `sqlean.version() -> str`: Returns SQLean version string.
-  - `sqlean.execute(db_path: str, sql: str) -> bool`: Executes DDL / DML commands (`CREATE TABLE`, `INSERT`, `ALTER TABLE`) with auto-commit.
-  - `sqlean.execute_count(db_path: str, table_name: str) -> int`: Returns integer row count for a table.
-  - `sqlean.execute_query(db_path: str, sql: str) -> str`: Executes queries and returns formatted output rows.
-- Compiled via `mojo build --emit shared-lib -I . src/py_export.mojo -o sqlean.so`.
+  - `leansql.version() -> str`: Returns LeanSQL version string.
+  - `leansql.execute(db_path: str, sql: str) -> bool`: Executes DDL / DML commands (`CREATE TABLE`, `INSERT`, `ALTER TABLE`) with auto-commit.
+  - `leansql.execute_count(db_path: str, table_name: str) -> int`: Returns integer row count for a table.
+  - `leansql.execute_query(db_path: str, sql: str) -> str`: Executes queries and returns formatted output rows.
+- Compiled via `mojo build --emit shared-lib -I . src/interop/py_export.mojo -o leansql.so`.
 
 ---
 
 ## Test Suites & Validation
 
 ### New Test Suites
-1. **Suite 14**: [`tests/test_suite_14_pragma_schema.mojo`](file:///mnt/c/Documents/Mojo/SQLean/tests/test_suite_14_pragma_schema.mojo) (20 assertions)
+1. **Suite 14**: [`tests/test_suite_14_pragma_schema.mojo`](file:///mnt/c/Documents/Mojo/LeanSQL/tests/test_suite_14_pragma_schema.mojo) (20 assertions)
    - Verified `PRAGMA table_info` column attributes, types, PKs, NOT NULL constraints.
    - Verified `PRAGMA index_list` indexing metadata.
    - Verified `PRAGMA user_version` getter and setter.
    - Verified `sqlite_master` multi-column ordered catalog queries.
-2. **Suite 15**: [`tests/test_suite_15_alter_view.mojo`](file:///mnt/c/Documents/Mojo/SQLean/tests/test_suite_15_alter_view.mojo) (10 assertions)
+2. **Suite 15**: [`tests/test_suite_15_alter_view.mojo`](file:///mnt/c/Documents/Mojo/LeanSQL/tests/test_suite_15_alter_view.mojo) (10 assertions)
    - Verified `ALTER TABLE RENAME TO`.
    - Verified `ALTER TABLE ADD COLUMN` with default values and schema evolution backfill.
    - Verified `ALTER TABLE RENAME COLUMN`.
    - Verified `CREATE VIEW` registration and `DROP VIEW`.
-3. **Python Interop Test**: [`tests/test_python_interop.py`](file:///mnt/c/Documents/Mojo/SQLean/tests/test_python_interop.py)
-   - Verified `import sqlean`, schema creation, row insertions, counting, and querying directly from Python 3!
+3. **Python Interop Test**: [`tests/test_python_interop.py`](file:///mnt/c/Documents/Mojo/LeanSQL/tests/test_python_interop.py)
+   - Verified `import leansql`, schema creation, row insertions, counting, and querying directly from Python 3!
 
 ### Master Test Suite Status
 Running `bash tests/run_tests.sh` executes all 15 test suites:

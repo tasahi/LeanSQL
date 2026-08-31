@@ -42,7 +42,7 @@ Stage 8 achieves full independence from the compiled `libsqlite3.so` C library b
 
 ## Implemented Components
 
-### 1. Standalone Native Connection & Cursor ([`src/connection.mojo`](../src/connection.mojo), [`src/cursor.mojo`](../src/cursor.mojo))
+### 1. Standalone Native Connection & Cursor ([`src/engine/connection.mojo`](../src/engine/connection.mojo), [`src/engine/cursor.mojo`](../src/engine/cursor.mojo))
 - **`Connection`**: Manages pure Mojo schema metadata (`SchemaCatalog`), memory B-Trees (`MemBTree`), transactions, and savepoints.
 - **`Cursor`**: Provides full DB-API semantics (`execute`, `execute_params`, `fetchone`, `fetchall`, `column_names`, `rowcount`, `lastrowid`).
 - **Query Processing Engine**:
@@ -51,14 +51,14 @@ Stage 8 achieves full independence from the compiled `libsqlite3.so` C library b
   - DQL: `SELECT` with column projections, column aliases (`AS alias`), expressions, multi-predicate `WHERE` clauses, `GROUP BY`, `HAVING`, `ORDER BY` (ASC/DESC with SQLite NULLs-first collation), `DISTINCT`, `LIMIT`, `OFFSET`, and parameterized queries (`?`).
   - Transactions: Atomic `BEGIN`, `COMMIT`, `ROLLBACK`, named `SAVEPOINT`, and `RELEASE`.
 
-### 2. Built-in SQL Functions ([`src/functions.mojo`](../src/functions.mojo))
+### 2. Built-in SQL Functions ([`src/engine/functions.mojo`](../src/engine/functions.mojo))
 - Native implementation of standard SQLite scalar functions:
   - **Math**: `ABS(x)`, `ROUND(x, n)`.
   - **String**: `LENGTH(s)`, `UPPER(s)`, `LOWER(s)`, `SUBSTR(s, start, len)`, `TRIM(s)`, `LTRIM(s)`, `RTRIM(s)`, `INSTR(s, sub)`, `PRINTF(fmt, ...)`, `HEX(s)`.
   - **Type & Conditional**: `TYPEOF(x)`, `COALESCE(...)`, `IFNULL(x, y)`, `RANDOM()`, `CAST(x AS type)`.
   - **Aggregates**: `COUNT(*)`, `COUNT(col)`, `COUNT(DISTINCT col)`, `SUM(col)`, `TOTAL(col)`, `AVG(col)`, `MIN(col)`, `MAX(col)`, `GROUP_CONCAT(col, sep)`.
 
-### 3. Extended Tokenizer & Recursive-Descent Parser ([`src/tokenizer.mojo`](../src/tokenizer.mojo), [`src/parser.mojo`](../src/parser.mojo))
+### 3. Extended Tokenizer & Recursive-Descent Parser ([`src/sql/tokenizer.mojo`](../src/sql/tokenizer.mojo), [`src/sql/parser.mojo`](../src/sql/parser.mojo))
 - Full tokenizer supporting all SQL keywords, string literals (`'...'`), numbers, multi-character operators (`||`, `!=`, `<=`, `>=`, `==`), and delimiters.
 - Recursive-descent AST parser generating copyable AST nodes for statements, expressions, and scalar subqueries (`(SELECT ...)`).
 
@@ -94,7 +94,7 @@ bash tests/run_tests.sh
 ### Full Test Output
 ```
 =======================================================================
-           SQLean: TOP 100 FUNDAMENTAL SQLITE TESTS SUITE              
+           LeanSQL: TOP 100 FUNDAMENTAL SQLITE TESTS SUITE              
 =======================================================================
 
 =======================================================
@@ -249,7 +249,7 @@ bash tests/run_tests.sh
   [PASS] func-1.1a - ABS(-42) = 42
   [PASS] func-1.1b - ABS(42) = 42
   [PASS] func-1.1c - ABS(0) = 0
-  [PASS] func-1.2a - LENGTH('SQLean') = 6
+  [PASS] func-1.2a - LENGTH('LeanSQL') = 6
   [PASS] func-1.2b - LENGTH('') = 0
   [PASS] func-1.2c - LENGTH(NULL) is NULL
   [PASS] func-1.3a - UPPER() converts to uppercase

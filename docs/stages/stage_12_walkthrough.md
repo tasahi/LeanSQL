@@ -6,7 +6,7 @@ Stage 12 completes the full migration of the SQLite architecture into a **100% p
 
 ## 1. Overview of Accomplishments in Stage 12
 
-1. **Interactive Command-Line Shell (`src/cli.mojo` & `sqlean.mojo`)**:
+1. **Interactive Command-Line Shell (`src/interop/cli.mojo` & `leansql.mojo`)**:
    - Implemented an interactive SQLite-compatible REPL and CLI.
    - Built full support for dot commands:
      - `.help`: Complete command catalogue.
@@ -21,19 +21,19 @@ Stage 12 completes the full migration of the SQLite architecture into a **100% p
      - `.dump`: Complete SQL transaction dump of database schema and table records.
      - `.quit` / `.exit`: Clean session teardown.
 
-2. **C-ABI Header & Shared Library Integration (`include/sqlean.h` & `src/c_api.mojo`)**:
-   - Provided standard C header `include/sqlean.h` with complete SQLite3 type definitions and function prototypes.
+2. **C-ABI Header & Shared Library Integration (`include/leansql.h` & `src/interop/c_api.mojo`)**:
+   - Provided standard C header `include/leansql.h` with complete SQLite3 type definitions and function prototypes.
    - Built pure-Mojo `CDatabaseContext` and `CStatementContext` representing connection and statement state machines.
    - Implemented comprehensive `sqlite3_*` operations: `sqlite3_open`, `sqlite3_prepare_v2`, `sqlite3_step`, `sqlite3_column_*`, `sqlite3_changes`, `sqlite3_last_insert_rowid`, `sqlite3_finalize`, `sqlite3_close`.
 
-3. **Python Drop-In Client Driver (`sqlean_driver.py` & `sqlean.so`)**:
-   - Built `sqlean_driver.py` providing a Python DB-API 2.0 interface (`connect()`, `Connection`, `Cursor`, `Row`, `OperationalError`).
-   - Integrated native SIMD and vectorized query execution via the compiled `sqlean.so` Python C-extension module.
+3. **Python Drop-In Client Driver (`leansql_driver.py` & `leansql.so`)**:
+   - Built `leansql_driver.py` providing a Python DB-API 2.0 interface (`connect()`, `Connection`, `Cursor`, `Row`, `OperationalError`).
+   - Integrated native SIMD and vectorized query execution via the compiled `leansql.so` Python C-extension module.
 
 4. **New Test Suites Added**:
    - **Suite 19: Interactive CLI Shell & Dot Commands** (`tests/test_suite_19_cli.mojo`): 12 assertions, 100% PASS.
    - **Suite 20: Complete C-ABI Export** (`tests/test_suite_20_c_abi.mojo`): 17 assertions, 100% PASS.
-   - **Suite 21: Python DB-API Driver Verification** (`tests/test_sqlean_python_driver.py`): 5 test cases, 100% PASS.
+   - **Suite 21: Python DB-API Driver Verification** (`tests/test_leansql_python_driver.py`): 5 test cases, 100% PASS.
 
 ---
 
@@ -61,5 +61,5 @@ Stage 12 completes the full migration of the SQLite architecture into a **100% p
 | **18** | Database Triggers (AFTER INSERT/UPDATE/DELETE) | `test_suite_18_triggers.mojo` | 11 | **PASS** |
 | **19** | Interactive CLI Shell & Dot Commands | `test_suite_19_cli.mojo` | 12 | **PASS** |
 | **20** | Complete C-ABI Export | `test_suite_20_c_abi.mojo` | 17 | **PASS** |
-| **21** | Python DB-API Driver Verification | `test_sqlean_python_driver.py` | 5 | **PASS** |
-| **TOTAL** | **Full SQLean Test Suite** | `tests/run_tests.sh` | **298 / 298** | **100% PASS** |
+| **21** | Python DB-API Driver Verification | `test_leansql_python_driver.py` | 5 | **PASS** |
+| **TOTAL** | **Full LeanSQL Test Suite** | `tests/run_tests.sh` | **298 / 298** | **100% PASS** |

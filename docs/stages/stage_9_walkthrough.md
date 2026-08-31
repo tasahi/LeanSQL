@@ -2,7 +2,7 @@
 
 ## Overview
 
-Stage 9 extends SQLean's 100% standalone pure Mojo SQLite engine to support advanced multi-table querying, relational algebra compound set operations, and on-disk file persistence.
+Stage 9 extends LeanSQL's 100% standalone pure Mojo SQLite engine to support advanced multi-table querying, relational algebra compound set operations, and on-disk file persistence.
 
 ---
 
@@ -27,8 +27,8 @@ Stage 9 extends SQLean's 100% standalone pure Mojo SQLite engine to support adva
 
 ### C. Persistent On-Disk Storage Engine
 - **POSIX VFS Integration**:
-  - Connecting `Connection` to `VFS` and `DiskFile` (`src/vfs.mojo`).
-  - Automatic on-disk database file creation and binary serialization (`SQLEAN01` magic header format).
+  - Connecting `Connection` to `VFS` and `DiskFile` (`src/vfs/vfs_os.mojo`).
+  - Automatic on-disk database file creation and binary serialization (`LEANSQL01` magic header format).
   - Persists tables, columns, primary key metadata, auto-increment rowid state, and all `MemBTree` payload cells.
   - Automatic deserialization and restoration on `connect("path/to/db.db")`.
   - Atomic changes persisted upon `INSERT`, `UPDATE`, `DELETE`, and `commit()`.
@@ -37,7 +37,7 @@ Stage 9 extends SQLean's 100% standalone pure Mojo SQLite engine to support adva
 
 ## 2. Extended Test Suites
 
-Three new comprehensive test suites were ported and added to SQLean's master test runner:
+Three new comprehensive test suites were ported and added to LeanSQL's master test runner:
 
 | Suite | File | Coverage | Assertions |
 | :--- | :--- | :--- | :--- |
@@ -53,7 +53,7 @@ Running the master test suite via `bash tests/run_tests.sh` in the conda `moj` e
 
 ```text
 =======================================================================
-           SQLean: TOP 100+ FUNDAMENTAL SQLITE TESTS SUITE             
+           LeanSQL: TOP 100+ FUNDAMENTAL SQLITE TESTS SUITE             
 =======================================================================
 
 === Suite 1: Basic SELECT & Literals (select1.test) ===  -> 13/13 PASS
@@ -92,19 +92,19 @@ All fundamental test suites completed successfully!
                                          |
                                          v
                        +-----------------------------------+
-                       |       src/tokenizer.mojo          |
+                       |       src/sql/tokenizer.mojo          |
                        | (JOIN, UNION, INTERSECT, EXCEPT)  |
                        +-----------------------------------+
                                          |
                                          v
                        +-----------------------------------+
-                       |         src/parser.mojo           |
+                       |         src/sql/parser.mojo           |
                        | (SelectStmt + Joins + Compounds)  |
                        +-----------------------------------+
                                          |
                                          v
                        +-----------------------------------+
-                       |       src/connection.mojo         |
+                       |       src/engine/connection.mojo         |
                        | - Multi-Table Loop / Left Join    |
                        | - Set Union / Intersect / Except  |
                        | - Disk Pager & VFS Persistence    |
@@ -112,7 +112,7 @@ All fundamental test suites completed successfully!
                                     /         \
                                    v           v
                     +--------------------+   +-------------------+
-                    |   src/btree.mojo   |   |   src/vfs.mojo    |
+                    |   src/storage/btree.mojo   |   |   src/vfs/vfs_os.mojo    |
                     | (Record Payloads)  |   | (POSIX Disk File) |
                     +--------------------+   +-------------------+
 ```
