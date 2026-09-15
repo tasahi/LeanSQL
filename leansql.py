@@ -15,8 +15,18 @@ if not os.path.exists(_LIB_PATH):
 
 try:
     _lib = ctypes.CDLL(_LIB_PATH)
-except Exception as e:
-    _lib = None
+except Exception:
+    import ctypes.util
+    _found = (
+        ctypes.util.find_library("sqlite3")
+        or "/home/tasahi/miniconda/envs/moj/lib/libsqlite3.so"
+        or "/lib/x86_64-linux-gnu/libsqlite3.so.0"
+        or "libsqlite3.so.0"
+    )
+    try:
+        _lib = ctypes.CDLL(_found)
+    except Exception:
+        _lib = None
 
 
 # Types

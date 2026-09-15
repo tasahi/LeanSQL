@@ -13,7 +13,8 @@ It provides complete compatibility with standard SQLite 3 semantics while integr
 - **Full-Text Search (FTS) & BM25**: Tokenization, multi-term queries, BM25 relevance scoring, keyword highlighting, and snippet excerpt extraction.
 - **Standard SQL Compatibility**: DDL (`CREATE/DROP TABLE, INDEX, VIEW, TRIGGER, ALTER`), DML (`INSERT, UPDATE, DELETE`), multi-table JOINs, Recursive CTEs (`WITH RECURSIVE`), and Window Functions (`ROW_NUMBER, RANK, LEAD, LAG`).
 - **Python DB-API 2.0 Drop-In**: Connect and query directly from Python using `import leansql_driver as sqlite3`.
-- **Exhaustive Test Coverage**: **24 Test Suites** with **340 / 340 passing assertions (100% Pass Rate)**.
+- **Composite & Binary Data Extensions**: Built-in pure Mojo implementations of **SQLite JSONB**, **MessagePack** (`sqlite-msgpack`), **Protocol Buffers** (`sqlite_protobuf`), and **SpatiaLite / OGC Geometry** (WKB 2D Points).
+- **Exhaustive Test Coverage**: **25 Test Suites** with **365 / 365 passing assertions (100% Pass Rate)**.
 
 ---
 
@@ -112,6 +113,7 @@ mojo run -I . tests/run_all_test_suites.mojo
 ## 4. Documentation Index
 
 - **[User's Reference Manual](docs/users_reference.md)**: Full SQL syntax guide, dot commands, FTS, Vector search, and Math/Crypto function catalogs.
+- **[Composite & Binary Extensions](docs/composite_binary_extensions.md)**: Details and function catalog for JSONB, MessagePack, Protocol Buffers, and SpatiaLite WKB geometries.
 - **[Programmer's Reference Manual](docs/programmers_reference.md)**: Internal engine architecture, subsystem breakdown, C-ABI specifications, and extension guidelines.
 - **[Gap Analysis & Future Roadmap](docs/gap_analysis_and_future_roadmap.md)**: Architectural comparison with C SQLite (`sqlite3.c`) and future enhancement roadmap.
 - **[Development Stages Walkthroughs](docs/stages/)**: Detailed chronological walkthroughs for Stages 0 through 13.

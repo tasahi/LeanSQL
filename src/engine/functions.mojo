@@ -12,6 +12,10 @@ from src.core.types import *
 from src.engine.row import Value
 from src.core.utf import nocase_compare
 from src.ext.json import sql_json_extract, sql_json_array_length, sql_json_type, sql_json_valid
+from src.ext.jsonb import sql_jsonb, sql_json_from_jsonb, sql_jsonb_extract
+from src.ext.msgpack import sql_msgpack_pack, sql_msgpack_map, sql_msgpack_extract
+from src.ext.protobuf import sql_pb_extract_int, sql_pb_extract_float, sql_pb_extract_string
+from src.ext.spatial import sql_st_point, sql_st_x, sql_st_y, sql_st_distance, sql_st_astext
 
 
 def is_digit_char(c: UInt8) -> Bool:
@@ -543,5 +547,65 @@ def evaluate_scalar_func(name: String, args: List[Value]) -> Value:
         if len(args) >= 1 and not args[0].is_null():
             return sql_json_valid(args[0].to_string())
         return Value.of_int(0)
+
+    # --- JSONB Binary Extension Functions ---
+    elif nocase_compare(name, "JSONB") == 0:
+        if len(args) >= 1 and not args[0].is_null():
+            return sql_jsonb(args[0].to_string())
+        return Value.of_null()
+    elif nocase_compare(name, "JSON") == 0:
+        if len(args) >= 1 and not args[0].is_null():
+            return sql_json_from_jsonb(args[0].to_string())
+        return Value.of_null()
+    elif nocase_compare(name, "JSONB_EXTRACT") == 0:
+        if len(args) >= 2 and not args[0].is_null() and not args[1].is_null():
+            return sql_jsonb_extract(args[0].to_string(), args[1].to_string())
+        return Value.of_null()
+
+    # --- MessagePack Binary Extension Functions ---
+    elif nocase_compare(name, "MSGPACK_PACK") == 0 or nocase_compare(name, "MSGPACK") == 0:
+        return sql_msgpack_pack(args)
+    elif nocase_compare(name, "MSGPACK_MAP") == 0:
+        return sql_msgpack_map(args)
+    elif nocase_compare(name, "MSGPACK_EXTRACT") == 0 or nocase_compare(name, "MSGPACK_GET") == 0:
+        if len(args) >= 2 and not args[0].is_null() and not args[1].is_null():
+            return sql_msgpack_extract(args[0].to_string(), args[1].to_string())
+        return Value.of_null()
+
+    # --- Protocol Buffers Wire Format Functions ---
+    elif nocase_compare(name, "PB_EXTRACT_INT") == 0:
+        if len(args) >= 2 and not args[0].is_null() and not args[1].is_null():
+            return sql_pb_extract_int(args[0].to_string(), Int(args[1].to_int()))
+        return Value.of_null()
+    elif nocase_compare(name, "PB_EXTRACT_FLOAT") == 0 or nocase_compare(name, "PB_EXTRACT_REAL") == 0:
+        if len(args) >= 2 and not args[0].is_null() and not args[1].is_null():
+            return sql_pb_extract_float(args[0].to_string(), Int(args[1].to_int()))
+        return Value.of_null()
+    elif nocase_compare(name, "PB_EXTRACT_STRING") == 0 or nocase_compare(name, "PB_EXTRACT_TEXT") == 0:
+        if len(args) >= 2 and not args[0].is_null() and not args[1].is_null():
+            return sql_pb_extract_string(args[0].to_string(), Int(args[1].to_int()))
+        return Value.of_null()
+
+    # --- SpatiaLite / OGC Geometry Functions ---
+    elif nocase_compare(name, "ST_POINT") == 0:
+        if len(args) >= 2 and not args[0].is_null() and not args[1].is_null():
+            return sql_st_point(args[0].to_float(), args[1].to_float())
+        return Value.of_null()
+    elif nocase_compare(name, "ST_X") == 0:
+        if len(args) >= 1 and not args[0].is_null():
+            return sql_st_x(args[0].to_string())
+        return Value.of_null()
+    elif nocase_compare(name, "ST_Y") == 0:
+        if len(args) >= 1 and not args[0].is_null():
+            return sql_st_y(args[0].to_string())
+        return Value.of_null()
+    elif nocase_compare(name, "ST_DISTANCE") == 0:
+        if len(args) >= 2 and not args[0].is_null() and not args[1].is_null():
+            return sql_st_distance(args[0].to_string(), args[1].to_string())
+        return Value.of_null()
+    elif nocase_compare(name, "ST_ASTEXT") == 0:
+        if len(args) >= 1 and not args[0].is_null():
+            return sql_st_astext(args[0].to_string())
+        return Value.of_null()
 
     return Value.of_null()
