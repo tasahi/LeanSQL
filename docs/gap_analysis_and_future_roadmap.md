@@ -1,3 +1,19 @@
+---
+type: gap-analysis
+title: "LeanSQL Pure-Mojo: Architectural Parity, Gap Analysis, and Future Roadmap"
+description: "Comprehensive technical gap analysis and architectural parity comparison between 100% pure Mojo LeanSQL and canonical C SQLite (sqlite3.c) / LeanSQL extensions ecosystem."
+tags:
+  - mojo
+  - sqlite
+  - gap-analysis
+  - roadmap
+  - parity
+  - pure-mojo
+version: "1.0"
+last_updated: "2026-09-16"
+status: active
+---
+
 # LeanSQL Pure-Mojo: Architectural Parity, Gap Analysis, and Future Roadmap
 
 This document provides a comprehensive technical comparison between the **100% Pure-Mojo LeanSQL Implementation** and the canonical C SQLite codebase (`sqlite3.c`, `sqlite3.h`) / LeanSQL extensions ecosystem (`C:\Documents\Programming\sqlite`).

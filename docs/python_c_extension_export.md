@@ -1,3 +1,19 @@
+---
+type: integration-guide
+title: "Native Python C-Extension Module Export (leansql.so)"
+description: "Implementation and build instructions for exporting LeanSQL as a native C-extension shared library using Mojo's PythonModuleBuilder and PyInit entrypoints."
+tags:
+  - mojo
+  - python
+  - c-extension
+  - interop
+  - leansql
+  - shared-lib
+version: "1.0"
+last_updated: "2026-09-16"
+status: active
+---
+
 # Native Python C-Extension Module Export (`leansql.so`)
 
 LeanSQL can be built directly into a standard Python native C-extension shared library (`leansql.so`) using Mojo's `PythonModuleBuilder` and exported `PyInit_leansql` ABI entrypoint.

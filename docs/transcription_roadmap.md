@@ -1,3 +1,18 @@
+---
+type: roadmap
+title: "SQLite to Mojo Translation Roadmap & Pythonic Client API Proposal"
+description: "Phased engineering roadmap and API specification for incrementally transcribing SQLite from canonical C into pure Mojo with continuous differential verification."
+tags:
+  - mojo
+  - sqlite
+  - roadmap
+  - migration
+  - api-design
+version: "1.0"
+last_updated: "2026-09-16"
+status: active
+---
+
 # SQLite to Mojo Translation Roadmap & Pythonic Client API Proposal
 
 ## 1. Executive Summary & Strategy

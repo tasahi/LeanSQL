@@ -1,3 +1,19 @@
+---
+type: specification
+title: "Universal Abstract Syntax Tree (UAST) Integration & Specification"
+description: "Specification defining the mapping between LeanSQL's AST tokens and the Unimo unified multi-language abstract syntax tree representations."
+tags:
+  - mojo
+  - sqlite
+  - uast
+  - unimo
+  - parser
+  - ast
+version: "1.0"
+last_updated: "2026-09-16"
+status: active
+---
+
 # Universal Abstract Syntax Tree (UAST) Integration & Specification
 
 This document describes the alignment between **LeanSQL** and the **Unimo** (`/mnt/c/Documents/Mojo/unimo`) unified multi-language abstract syntax tree project.

@@ -1,3 +1,19 @@
+---
+type: reference
+title: "LeanSQL User's Reference Manual"
+description: "Comprehensive operational manual for LeanSQL, detailing CLI shell dot-commands, supported SQL DDL/DML syntax, transactions, and built-in function catalogs."
+tags:
+  - mojo
+  - sqlite
+  - reference
+  - manual
+  - user-guide
+  - sql
+version: "1.0"
+last_updated: "2026-09-16"
+status: active
+---
+
 # LeanSQL: User's Reference Manual
 
 The **LeanSQL** user manual provides full syntax specifications, built-in functions, dot commands, and usage guides for the 100% pure-Mojo database engine.

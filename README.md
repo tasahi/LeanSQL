@@ -1,4 +1,6 @@
-# LeanSQL: 100% Pure-Mojo SQLite Engine & Extensions
+# LeanSQL: 100% Pure-Mojo SQLite compatible Engine & Extensions
+
+What if there is an implementation of SQLite in mojo?  
 
 **LeanSQL** is a full-featured, zero-dependency relational database engine and extension ecosystem implemented **100% in pure Mojo**.
 
@@ -110,10 +112,13 @@ mojo run -I . tests/run_all_test_suites.mojo
 
 ---
 
-## 4. Documentation Index
+## 4. Documentation
+ 
+Comprehensive technical documentation, user guides, internal engine specifications, and evolutionary walkthroughs are organized in the [Documentation Index](docs/index.md):
+ 
+- **[LeanSQL Documentation Hub](docs/index.md)**: Master index, technical summary, architecture guides, extension catalogs, and stages walkthroughs.
 
-- **[User's Reference Manual](docs/users_reference.md)**: Full SQL syntax guide, dot commands, FTS, Vector search, and Math/Crypto function catalogs.
-- **[Composite & Binary Extensions](docs/composite_binary_extensions.md)**: Details and function catalog for JSONB, MessagePack, Protocol Buffers, and SpatiaLite WKB geometries.
-- **[Programmer's Reference Manual](docs/programmers_reference.md)**: Internal engine architecture, subsystem breakdown, C-ABI specifications, and extension guidelines.
-- **[Gap Analysis & Future Roadmap](docs/gap_analysis_and_future_roadmap.md)**: Architectural comparison with C SQLite (`sqlite3.c`) and future enhancement roadmap.
-- **[Development Stages Walkthroughs](docs/stages/)**: Detailed chronological walkthroughs for Stages 0 through 13.
+
+## Notes
+
+This code was generated with the support of AI Agents. Please leave suggestions for further improvements.

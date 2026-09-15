@@ -1,3 +1,18 @@
+---
+type: research
+title: "Feasibility of SQLite to Mojo Translation"
+description: "Systems programming feasibility analysis evaluating the scale, pointer arithmetic, memory ownership, and verification challenges in porting SQLite from C to Mojo."
+tags:
+  - mojo
+  - sqlite
+  - feasibility
+  - translation
+  - systems-programming
+version: "1.0"
+last_updated: "2026-09-16"
+status: active
+---
+
 # Feasibility of SQLite to Mojo Translation
 
 Translating SQLite into a systems language like Mojo using an LLM is technically possible in parts, but doing a full port is one of the most complex software engineering challenges you could take on.

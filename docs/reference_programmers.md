@@ -1,3 +1,21 @@
+---
+type: architecture
+title: "LeanSQL Programmer's Reference Manual"
+description: "Technical reference manual detailing the internal engine architecture, layered subsystems, type systems, and C/Python extension interfaces for LeanSQL developers."
+tags:
+  - mojo
+  - sqlite
+  - architecture
+  - btree
+  - vdbe
+  - pager
+  - compiler
+  - internals
+version: "1.0"
+last_updated: "2026-09-16"
+status: active
+---
+
 # LeanSQL: Programmer's Reference Manual
 
 This technical manual details the internal architecture, subsystem decomposition, type systems, and C/Python extension APIs for developers working on or extending the **100% Pure-Mojo LeanSQL database engine**.

@@ -1,3 +1,21 @@
+---
+type: extension-guide
+title: "LeanSQL Composite & Binary Types Extensions (JSONB, MessagePack, Protobuf, SpatiaLite)"
+description: "Specification and user reference for LeanSQL's pure Mojo binary composite types, including SQLite JSONB, MessagePack, Protocol Buffers wire extraction, and OGC WKB 2D point geometries."
+tags:
+  - mojo
+  - sqlite
+  - extensions
+  - jsonb
+  - msgpack
+  - protobuf
+  - spatialite
+  - geometry
+version: "1.0"
+last_updated: "2026-09-16"
+status: active
+---
+
 # LeanSQL Composite & Binary Types Extensions
 
 LeanSQL introduces native pure-Mojo extensions for handling composite and binary structured data inside standard SQLite columns. These extensions mirror popular SQLite counterparts without external C libraries:
