@@ -1,6 +1,7 @@
 """ Universal Abstract Syntax Tree (UAST) Integration for LeanSQL.
 
-Aligns LeanSQL AST structures with Unimo's Universal AST specification (`/mnt/c/Documents/Mojo/unimo/uast.mojo`).
+Aligns LeanSQL AST structures with Unimo's Universal AST specification
+(`unimo/uast.mojo`).
 
 Extends Unimo UAST with SQL domain AST node tags:
 - Core Universal AST tags (0..15):

@@ -298,11 +298,8 @@ def sql_jsonb_extract(jsonb_str: String, path_str: String) -> Value:
         except:
             return Value.of_null()
 
-    try:
-        var steps = parse_json_path(path_str)
-        var res = extract_json_by_path(root, steps)
-        if not res:
-            return Value.of_null()
-        return res.value().to_sqlite_value(True)
-    except:
+    var steps = parse_json_path(path_str)
+    var res = extract_json_by_path(root, steps)
+    if not res:
         return Value.of_null()
+    return res.value().to_sqlite_value(True)

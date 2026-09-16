@@ -51,20 +51,20 @@ The master test suite now verifies **264 canonical SQLite compatibility assertio
 ## Test Suites & Validation
 
 ### New Test Suites
-1. **Suite 16: Derived Tables & CTEs** ([`tests/test_suite_16_subqueries_cte.mojo`](file:///mnt/c/Documents/Mojo/LeanSQL/tests/test_suite_16_subqueries_cte.mojo))
+1. **Suite 16: Derived Tables & CTEs** ([`tests/test_suite_16_subqueries_cte.mojo`](../tests/test_suite_16_subqueries_cte.mojo))
    - Verified filtered derived subquery in `FROM`.
    - Verified non-recursive CTE filtering and projection.
    - Verified recursive CTE sequence generation (`1..5`).
    - Verified recursive CTE powers of 2 (`1, 2, 4, 8, 16, 32`).
    - **Result**: 11 / 11 PASSED (100%).
 
-2. **Suite 17: Window Functions** ([`tests/test_suite_17_window_funcs.mojo`](file:///mnt/c/Documents/Mojo/LeanSQL/tests/test_suite_17_window_funcs.mojo))
+2. **Suite 17: Window Functions** ([`tests/test_suite_17_window_funcs.mojo`](../tests/test_suite_17_window_funcs.mojo))
    - Verified `ROW_NUMBER() OVER (ORDER BY score DESC)`.
    - Verified partitioned `ROW_NUMBER() OVER (PARTITION BY team ORDER BY score DESC)`.
    - Verified `LEAD()` and `LAG()` over sorted sequences with NULL edge cases.
    - **Result**: 15 / 15 PASSED (100%).
 
-3. **Suite 18: Database Triggers** ([`tests/test_suite_18_triggers.mojo`](file:///mnt/c/Documents/Mojo/LeanSQL/tests/test_suite_18_triggers.mojo))
+3. **Suite 18: Database Triggers** ([`tests/test_suite_18_triggers.mojo`](../tests/test_suite_18_triggers.mojo))
    - Verified `CREATE TRIGGER AFTER INSERT` with `NEW.col` audit record insertion.
    - Verified `CREATE TRIGGER AFTER UPDATE` audit logging.
    - Verified `CREATE TRIGGER AFTER DELETE` audit logging.

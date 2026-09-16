@@ -1,6 +1,6 @@
 # Walkthrough - Stage 8: 100% Standalone Pure Mojo SQLite Engine & Canonical 100 Test Suite
 
-Stage 8 achieves full independence from the compiled `libsqlite3.so` C library by transcribing the entire SQLite core execution lifecycle directly into native Mojo. The project also ports the **top 100 canonical SQLite tests** from `/mnt/c/Documents/Programming/sqlite/test/` into 10 structured test suites, running 100% in pure Mojo.
+Stage 8 achieves full independence from the compiled `libsqlite3.so` C library by transcribing the entire SQLite core execution lifecycle directly into native Mojo. The project also ports the **top 100 canonical SQLite tests** from `sqlite/test/` into 10 structured test suites, running 100% in pure Mojo.
 
 ---
 

@@ -38,7 +38,7 @@ def run_composite_binary_tests(mut h: TestHarness) raises:
     cur.execute("SELECT msgpack_pack(10, 'Mojo', 3.1415)")
     r = cur.fetchone()
     h.assert_true("msgpack-2.1a", r.__bool__(), "msgpack_pack returns a row")
-    var mp_arr = r.value().get_string(0)
+    _ = r.value().get_string(0)
 
     cur.execute("SELECT msgpack_extract(msgpack_pack(10, 'Mojo', 3.1415), '1')")
     r = cur.fetchone()
@@ -47,7 +47,7 @@ def run_composite_binary_tests(mut h: TestHarness) raises:
     # MessagePack Map
     cur.execute("SELECT msgpack_map('user', 'admin', 'role_id', 42)")
     r = cur.fetchone()
-    var mp_map = r.value().get_string(0)
+    _ = r.value().get_string(0)
 
     cur.execute("SELECT msgpack_extract(msgpack_map('user', 'admin', 'role_id', 42), 'role_id')")
     r = cur.fetchone()

@@ -5,3 +5,5 @@ test_runner
 __pycache__/
 *.db
 *.db-journal
+
+data/

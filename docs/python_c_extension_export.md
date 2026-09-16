@@ -122,11 +122,11 @@ print(leansql.version())
 # Output: LeanSQL 0.1.0 (Mojo + SQLite Engine)
 
 # 2. Execute COUNT query directly from Python
-count = leansql.execute_count("/mnt/c/Documents/Programming/CMStrA/data/cmstra.db", "rag_chunks")
+count = leansql.execute_count("./data/example.db", "rag_chunks")
 print(f"Total chunks: {count}")
 # Output: Total chunks: 1638
 
 # 3. Execute arbitrary SQL query returning formatted data
-result = leansql.execute_query("/mnt/c/Documents/Programming/CMStrA/data/cmstra.db", "SELECT id, title FROM navigation_items LIMIT 3")
+result = leansql.execute_query("./data/example.db", "SELECT id, title FROM navigation_items LIMIT 3")
 print(result)
 ```

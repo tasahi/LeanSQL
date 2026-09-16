@@ -204,6 +204,6 @@ def connect(database: String) raises -> Connection:
 
 ## 5. Next Steps
 
-1. Build `sqlite3.mojo` (Stage 0) and link against `/mnt/c/Documents/Programming/sqlite`.
+1. Build `sqlite3.mojo` (Stage 0) and link against `./sqlite`.
 2. Implement test suite validating `connect`, `execute`, `fetchone`, and `commit`.
 3. Begin Stage 1: Translate `sqlite3PutVarint` / `sqlite3GetVarint` from `util.c` into pure Mojo with differential fuzz testing.

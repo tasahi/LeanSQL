@@ -299,8 +299,26 @@ struct JsonPathStep(ImplicitlyCopyable, Copyable, Movable):
         self.index = move.index
 
 
+def _is_all_digits(s: String) -> Bool:
+    var b = s.as_bytes()
+    if len(b) == 0:
+        return False
+    for i in range(len(b)):
+        if b[i] < 48 or b[i] > 57: # not '0'-'9'
+            return False
+    return True
+
+
+def _parse_digits(s: String) -> Int:
+    var res = 0
+    var b = s.as_bytes()
+    for i in range(len(b)):
+        res = res * 10 + Int(b[i] - 48)
+    return res
+
+
 def parse_json_path(path: String) -> List[JsonPathStep]:
-    """ Parses a JSON path like '$.name', '$.address.city', '$.tags[0]', or '[1]'."""
+    """ Parses a JSON path like '$.name', '$.address.city', '$.values.1', '$.tags[0]', or '[1]'."""
     var steps = List[JsonPathStep]()
     var s = path.strip()
     var b = s.as_bytes()
@@ -318,7 +336,10 @@ def parse_json_path(path: String) -> List[JsonPathStep]:
                 key += chr(Int(b[i]))
                 i += 1
             if key.byte_length() > 0:
-                steps.append(JsonPathStep(key))
+                if _is_all_digits(key):
+                    steps.append(JsonPathStep(_parse_digits(key)))
+                else:
+                    steps.append(JsonPathStep(key))
         elif b[i] == 91: # '['
             i += 1
             var idx_str = String()
@@ -328,10 +349,13 @@ def parse_json_path(path: String) -> List[JsonPathStep]:
             if i < n and b[i] == 93: # ']'
                 i += 1
             var idx: Int
-            try:
-                idx = Int(atol(idx_str))
-            except:
-                idx = 0
+            if _is_all_digits(idx_str):
+                idx = _parse_digits(idx_str)
+            else:
+                try:
+                    idx = Int(atol(idx_str))
+                except:
+                    idx = 0
             steps.append(JsonPathStep(idx))
         else:
             var key = String()
@@ -339,7 +363,10 @@ def parse_json_path(path: String) -> List[JsonPathStep]:
                 key += chr(Int(b[i]))
                 i += 1
             if key.byte_length() > 0:
-                steps.append(JsonPathStep(key))
+                if _is_all_digits(key):
+                    steps.append(JsonPathStep(_parse_digits(key)))
+                else:
+                    steps.append(JsonPathStep(key))
 
     return steps^
 
@@ -349,24 +376,43 @@ def extract_json_by_path(root: JsonValue, steps: List[JsonPathStep]) -> Optional
     for s_idx in range(len(steps)):
         var step = steps[s_idx]
         if step.is_index:
-            if cur.tag != JSON_ARRAY:
+            if cur.tag == JSON_ARRAY:
+                var idx = step.index
+                if idx < 0 or idx >= len(cur.values):
+                    return None
+                var next_val = cur.values[idx].copy()
+                cur = next_val^
+            elif cur.tag == JSON_OBJECT:
+                var key_str = String(step.index)
+                var found = False
+                for k_idx in range(len(cur.keys)):
+                    if cur.keys[k_idx] == key_str:
+                        var next_val = cur.values[k_idx].copy()
+                        cur = next_val^
+                        found = True
+                        break
+                if not found:
+                    return None
+            else:
                 return None
-            var idx = step.index
-            if idx < 0 or idx >= len(cur.values):
-                return None
-            var next_val = cur.values[idx].copy()
-            cur = next_val^
         else:
-            if cur.tag != JSON_OBJECT:
-                return None
-            var found = False
-            for k_idx in range(len(cur.keys)):
-                if cur.keys[k_idx] == step.key:
-                    var next_val = cur.values[k_idx].copy()
-                    cur = next_val^
-                    found = True
-                    break
-            if not found:
+            if cur.tag == JSON_OBJECT:
+                var found = False
+                for k_idx in range(len(cur.keys)):
+                    if cur.keys[k_idx] == step.key:
+                        var next_val = cur.values[k_idx].copy()
+                        cur = next_val^
+                        found = True
+                        break
+                if not found:
+                    return None
+            elif cur.tag == JSON_ARRAY and _is_all_digits(step.key):
+                var idx = _parse_digits(step.key)
+                if idx < 0 or idx >= len(cur.values):
+                    return None
+                var next_val = cur.values[idx].copy()
+                cur = next_val^
+            else:
                 return None
     return Optional(cur^)
 

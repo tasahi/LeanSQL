@@ -50,17 +50,17 @@ LeanSQL remains **100% pure Mojo** with zero external C dependencies, yet can no
 ## Test Suites & Validation
 
 ### New Test Suites
-1. **Suite 14**: [`tests/test_suite_14_pragma_schema.mojo`](file:///mnt/c/Documents/Mojo/LeanSQL/tests/test_suite_14_pragma_schema.mojo) (20 assertions)
+1. **Suite 14**: [`tests/test_suite_14_pragma_schema.mojo`](../tests/test_suite_14_pragma_schema.mojo) (20 assertions)
    - Verified `PRAGMA table_info` column attributes, types, PKs, NOT NULL constraints.
    - Verified `PRAGMA index_list` indexing metadata.
    - Verified `PRAGMA user_version` getter and setter.
    - Verified `sqlite_master` multi-column ordered catalog queries.
-2. **Suite 15**: [`tests/test_suite_15_alter_view.mojo`](file:///mnt/c/Documents/Mojo/LeanSQL/tests/test_suite_15_alter_view.mojo) (10 assertions)
+2. **Suite 15**: [`tests/test_suite_15_alter_view.mojo`](../tests/test_suite_15_alter_view.mojo) (10 assertions)
    - Verified `ALTER TABLE RENAME TO`.
    - Verified `ALTER TABLE ADD COLUMN` with default values and schema evolution backfill.
    - Verified `ALTER TABLE RENAME COLUMN`.
    - Verified `CREATE VIEW` registration and `DROP VIEW`.
-3. **Python Interop Test**: [`tests/test_python_interop.py`](file:///mnt/c/Documents/Mojo/LeanSQL/tests/test_python_interop.py)
+3. **Python Interop Test**: [`tests/test_python_interop.py`](../tests/test_python_interop.py)
    - Verified `import leansql`, schema creation, row insertions, counting, and querying directly from Python 3!
 
 ### Master Test Suite Status

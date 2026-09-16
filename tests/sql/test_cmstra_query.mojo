@@ -3,7 +3,7 @@ from src.engine.connection import connect
 
 def main() raises:
     # 1. Path to SQLite database file
-    var db_path = "/mnt/c/Documents/Programming/CMStrA/data/cmstra.db"
+    var db_path = "./data/example.db"
     print("Opening database:", db_path)
 
     # 2. Connect to database

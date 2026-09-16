@@ -16,7 +16,7 @@ status: active
 
 # Universal Abstract Syntax Tree (UAST) Integration & Specification
 
-This document describes the alignment between **LeanSQL** and the **Unimo** (`/mnt/c/Documents/Mojo/unimo`) unified multi-language abstract syntax tree project.
+This document describes the alignment between **LeanSQL** and the **Unimo** (`unimo`) unified multi-language abstract syntax tree project.
 
 ---
 
