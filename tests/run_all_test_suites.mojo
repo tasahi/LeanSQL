@@ -24,6 +24,7 @@ from tests.ext.test_suite_23_vector import run_vector_tests
 from tests.ext.test_suite_24_math_crypto import run_math_crypto_tests
 from tests.ext.test_suite_25_json import run_json_tests
 from tests.ext.test_suite_26_composite_binary import run_composite_binary_tests
+from tests.engine.test_suite_27_virtual_table_and_extensions import run_virtual_table_and_extensions_tests
 
 
 def main() raises:
@@ -58,6 +59,7 @@ def main() raises:
     run_math_crypto_tests(h)
     run_json_tests(h)
     run_composite_binary_tests(h)
+    run_virtual_table_and_extensions_tests(h)
 
     print("\n=======================================================================")
     print("                    FINAL EXTENDED TEST SUITE RESULTS                  ")

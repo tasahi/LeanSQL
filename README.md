@@ -16,7 +16,8 @@ It provides complete compatibility with standard SQLite 3 semantics while integr
 - **Standard SQL Compatibility**: DDL (`CREATE/DROP TABLE, INDEX, VIEW, TRIGGER, ALTER`), DML (`INSERT, UPDATE, DELETE`), multi-table JOINs, Recursive CTEs (`WITH RECURSIVE`), and Window Functions (`ROW_NUMBER, RANK, LEAD, LAG`).
 - **Python DB-API 2.0 Drop-In**: Connect and query directly from Python using `import leansql_driver as sqlite3`.
 - **Composite & Binary Data Extensions**: Built-in pure Mojo implementations of **SQLite JSONB**, **MessagePack** (`sqlite-msgpack`), **Protocol Buffers** (`sqlite_protobuf`), and **SpatiaLite / OGC Geometry** (WKB 2D Points).
-- **Exhaustive Test Coverage**: **25 Test Suites** with **365 / 365 passing assertions (100% Pass Rate)**.
+- **Virtual Tables & Extension Interface**: Full support for `CREATE VIRTUAL TABLE ... USING`, user-defined custom scalar function registration (`conn.register_function`), and dynamic library loading (`conn.load_extension`).
+- **Exhaustive Test Coverage**: **27 Test Suites** with **391 / 391 passing assertions (100% Pass Rate)**.
 
 ---
 
@@ -97,8 +98,8 @@ leansql> .quit
 ---
 
 ## 3. Running the Test Suite
-
-Execute all 24 test suites covering fundamental SQLite semantics and LeanSQL extensions:
+ 
+Execute all 27 test suites covering fundamental SQLite semantics, virtual tables, and LeanSQL extensions:
 
 ```bash
 bash tests/run_tests.sh

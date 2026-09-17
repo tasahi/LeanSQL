@@ -42,18 +42,14 @@ from src.sql.parser import (
 from src.vdbe.opcode import *
 from src.vdbe.vm import Vdbe
 from src.storage.btree import MemBTree
-from src.engine.functions import evaluate_scalar_func, sql_cast
+from src.engine.functions import evaluate_scalar_func, sql_cast, FunctionRegistry
 from src.ext.json import sql_json_extract
 from src.core.utf import nocase_compare
 
 
-def eval_expr_row(
-    expr: Expr,
-    row: Row,
-    col_names: List[String],
-    alias_names: List[String] = List[String](),
-    alias_exprs: List[Expr] = List[Expr](),
-) -> Value:
+def eval_expr_row( expr: Expr, row: Row, col_names: List[String],
+        alias_names: List[String] = List[String](), alias_exprs: List[Expr] = List[Expr](),
+        fn_registry: Optional[FunctionRegistry] = None ) -> Value:
     """ Directly evaluates an expression tree against a given row snapshot."""
     var k = expr.kind
 
@@ -105,7 +101,7 @@ def eval_expr_row(
         for a in range(len(alias_names)):
             if nocase_compare(alias_names[a], name) == 0:
                 if a < len(alias_exprs):
-                    return eval_expr_row(alias_exprs[a], row, col_names, alias_names, alias_exprs)
+                    return eval_expr_row(alias_exprs[a], row, col_names, alias_names, alias_exprs, fn_registry)
         return Value.of_null()
 
     elif k == EXPR_STAR:
@@ -119,18 +115,18 @@ def eval_expr_row(
                     return row[i].copy()
         var args = List[Value]()
         for i in range(len(expr.args)):
-            args.append(eval_expr_row(expr.args[i], row, col_names, alias_names, alias_exprs))
-        return evaluate_scalar_func(expr.func_name, args)
+            args.append(eval_expr_row(expr.args[i], row, col_names, alias_names, alias_exprs, fn_registry))
+        return evaluate_scalar_func(expr.func_name, args, fn_registry)
 
     elif k == EXPR_CAST:
         if len(expr.args) > 0:
-            var src = eval_expr_row(expr.args[0], row, col_names, alias_names, alias_exprs)
+            var src = eval_expr_row(expr.args[0], row, col_names, alias_names, alias_exprs, fn_registry)
             return sql_cast(src, expr.col_name)
         return Value.of_null()
 
     elif k == EXPR_UNARY:
         if len(expr.args) > 0:
-            var child = eval_expr_row(expr.args[0], row, col_names, alias_names, alias_exprs)
+            var child = eval_expr_row(expr.args[0], row, col_names, alias_names, alias_exprs, fn_registry)
             if expr.op == "-":
                 if child.type_tag == SQLITE_INTEGER:
                     return Value.of_int(-child.int_val)
@@ -142,8 +138,8 @@ def eval_expr_row(
 
     elif k == EXPR_BINARY:
         if len(expr.args) >= 2:
-            var left = eval_expr_row(expr.args[0], row, col_names, alias_names, alias_exprs)
-            var right = eval_expr_row(expr.args[1], row, col_names, alias_names, alias_exprs)
+            var left = eval_expr_row(expr.args[0], row, col_names, alias_names, alias_exprs, fn_registry)
+            var right = eval_expr_row(expr.args[1], row, col_names, alias_names, alias_exprs, fn_registry)
             var op = expr.op
 
             # NULL logic for IS / IS NOT
@@ -241,16 +237,16 @@ def eval_expr_row(
                     instr_args.append(Value.of_text(text))
                     instr_args.append(Value.of_text(sub))
                     var matched = False
-                    if sub.byte_length() == 0 or evaluate_scalar_func("INSTR", instr_args).to_int() > 0:
+                    if sub.byte_length() == 0 or evaluate_scalar_func("INSTR", instr_args, fn_registry).to_int() > 0:
                         matched = True
                     return Value.of_int(Int64(1 if matched else 0))
                 return Value.of_int(Int64(1 if text == pat else 0))
 
     elif k == EXPR_BETWEEN:
         if len(expr.args) >= 3:
-            var target = eval_expr_row(expr.args[0], row, col_names, alias_names, alias_exprs)
-            var low = eval_expr_row(expr.args[1], row, col_names, alias_names, alias_exprs)
-            var high = eval_expr_row(expr.args[2], row, col_names, alias_names, alias_exprs)
+            var target = eval_expr_row(expr.args[0], row, col_names, alias_names, alias_exprs, fn_registry)
+            var low = eval_expr_row(expr.args[1], row, col_names, alias_names, alias_exprs, fn_registry)
+            var high = eval_expr_row(expr.args[2], row, col_names, alias_names, alias_exprs, fn_registry)
             if target.is_null() or low.is_null() or high.is_null():
                 return Value.of_null()
             var t_val = target.to_float()
@@ -259,11 +255,11 @@ def eval_expr_row(
 
     elif k == EXPR_IN:
         if len(expr.args) >= 1:
-            var target = eval_expr_row(expr.args[0], row, col_names, alias_names, alias_exprs)
+            var target = eval_expr_row(expr.args[0], row, col_names, alias_names, alias_exprs, fn_registry)
             var has_null = False
             var found = False
             for i in range(1, len(expr.args)):
-                var cand = eval_expr_row(expr.args[i], row, col_names, alias_names, alias_exprs)
+                var cand = eval_expr_row(expr.args[i], row, col_names, alias_names, alias_exprs, fn_registry)
                 if cand.is_null():
                     has_null = True
                 elif not target.is_null() and target.to_string() == cand.to_string():
@@ -285,12 +281,12 @@ def eval_expr_row(
         var n_args = len(expr.args)
         var i = 0
         while i + 1 < n_args:
-            var cond = eval_expr_row(expr.args[i], row, col_names, alias_names, alias_exprs)
+            var cond = eval_expr_row(expr.args[i], row, col_names, alias_names, alias_exprs, fn_registry)
             if not cond.is_null() and cond.to_int() != 0:
-                return eval_expr_row(expr.args[i + 1], row, col_names, alias_names, alias_exprs)
+                return eval_expr_row(expr.args[i + 1], row, col_names, alias_names, alias_exprs, fn_registry)
             i += 2
         if i < n_args:
-            return eval_expr_row(expr.args[i], row, col_names, alias_names, alias_exprs)
+            return eval_expr_row(expr.args[i], row, col_names, alias_names, alias_exprs, fn_registry)
         return Value.of_null()
 
     return Value.of_null()

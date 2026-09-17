@@ -52,24 +52,37 @@ struct TableDef(ImplicitlyCopyable, Copyable, Movable):
     var columns: List[ColumnDef]
     var btree_idx: Int
     var auto_rowid: Int64
+    var is_virtual: Bool
+    var virtual_module: String
+    var virtual_args: String
 
-    def __init__(out self, name: String, btree_idx: Int):
+    def __init__(out self, name: String, btree_idx: Int, is_virtual: Bool = False,
+            virtual_module: String = "", virtual_args: String = ""):
         self.name = name
         self.columns = List[ColumnDef]()
         self.btree_idx = btree_idx
         self.auto_rowid = 1
+        self.is_virtual = is_virtual
+        self.virtual_module = virtual_module
+        self.virtual_args = virtual_args
 
     def __init__(out self, *, copy: Self):
         self.name = copy.name
         self.columns = copy.columns.copy()
         self.btree_idx = copy.btree_idx
         self.auto_rowid = copy.auto_rowid
+        self.is_virtual = copy.is_virtual
+        self.virtual_module = copy.virtual_module
+        self.virtual_args = copy.virtual_args
 
     def __init__(out self, *, deinit move: Self):
         self.name = move.name^
         self.columns = move.columns^
         self.btree_idx = move.btree_idx
         self.auto_rowid = move.auto_rowid
+        self.is_virtual = move.is_virtual
+        self.virtual_module = move.virtual_module^
+        self.virtual_args = move.virtual_args^
 
     def add_column(mut self, col: ColumnDef):
         self.columns.append(col)

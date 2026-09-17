@@ -64,6 +64,8 @@ from src.sql.parser import (
     STMT_DROP_VIEW,
     STMT_CREATE_TRIGGER,
     STMT_DROP_TRIGGER,
+    STMT_CREATE_VIRTUAL_TABLE,
+    CreateVirtualTableStmt,
     ALTER_RENAME_TABLE,
     ALTER_ADD_COLUMN,
     ALTER_RENAME_COLUMN,
@@ -87,7 +89,14 @@ from src.engine.schema import (
     TRIGGER_EVENT_DELETE,
 )
 from src.sql.compiler import eval_expr_row
-from src.engine.functions import evaluate_scalar_func
+from src.engine.functions import evaluate_scalar_func, FunctionRegistry, CustomScalarFunc
+from src.engine.vtab import (
+    DynamicLibrary,
+    VirtualTableModule,
+    VirtualTable,
+    VirtualTableCursor,
+    IndexConstraint,
+)
 from src.core.utf import nocase_compare
 from src.vfs.vfs_os import VFS, DiskFile
 
@@ -200,6 +209,9 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
     var last_rowid: Int64
     var change_count: Int
     var total_change_count: Int
+    var fn_registry: FunctionRegistry
+    var vtab_modules: List[VirtualTableModule]
+    var loaded_extensions: List[DynamicLibrary]
 
     def __init__(out self, database: String = ":memory:"):
         self.database = database
@@ -211,6 +223,9 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
         self.last_rowid = 0
         self.change_count = 0
         self.total_change_count = 0
+        self.fn_registry = FunctionRegistry()
+        self.vtab_modules = List[VirtualTableModule]()
+        self.loaded_extensions = List[DynamicLibrary]()
         if self.database != ":memory:" and self.database != "":
             try:
                 self._load_from_disk()
@@ -227,6 +242,9 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
         self.last_rowid = copy.last_rowid
         self.change_count = copy.change_count
         self.total_change_count = copy.total_change_count
+        self.fn_registry = copy.fn_registry.copy()
+        self.vtab_modules = copy.vtab_modules.copy()
+        self.loaded_extensions = copy.loaded_extensions.copy()
 
     def __init__(out self, *, deinit move: Self):
         self.database = move.database^
@@ -238,6 +256,30 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
         self.last_rowid = move.last_rowid
         self.change_count = move.change_count
         self.total_change_count = move.total_change_count
+        self.fn_registry = move.fn_registry^
+        self.vtab_modules = move.vtab_modules^
+        self.loaded_extensions = move.loaded_extensions^
+
+    def register_function(mut self, name: String, f: def(List[Value]) thin -> Value):
+        """ Registers a custom scalar SQL function for execution."""
+        self.fn_registry.register(name, f)
+
+    def register_module(mut self, name: String, mod: VirtualTableModule):
+        """ Registers a Virtual Table module with the connection."""
+        for i in range(len(self.vtab_modules)):
+            if nocase_compare(self.vtab_modules[i].module_name, name) == 0:
+                self.vtab_modules[i] = mod.copy()
+                return
+        self.vtab_modules.append(mod.copy())
+
+    def load_extension(mut self, path: String, entrypoint: String = "sqlite3_extension_init") raises:
+        """ Dynamically loads an external shared library extension via dlopen/dlsym."""
+        var lib = DynamicLibrary(path)
+        try:
+            var _ = lib.get_symbol_addr(entrypoint)
+        except:
+            pass
+        self.loaded_extensions.append(lib^)
 
     def cursor(mut self) -> Cursor:
         """ Creates a new Cursor attached to this Connection."""
@@ -617,6 +659,7 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
             var row_vals = List[Value]()
             var explicit_rowid: Optional[Int64] = None
 
+            var fn_reg = Optional(self.fn_registry.copy())
             if len(ins.columns) > 0:
                 for c in range(len(tbl_def.columns)):
                     var col_name = tbl_def.columns[c].name
@@ -626,7 +669,7 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
                             found_idx = k
                             break
                     if found_idx >= 0 and found_idx < len(ins.values):
-                        var v = eval_expr_row(ins.values[found_idx], empty_row, List[String]())
+                        var v = eval_expr_row(ins.values[found_idx], empty_row, List[String](), fn_registry=fn_reg)
                         if c == pk_idx and not v.is_null():
                             explicit_rowid = Optional(v.to_int())
                         row_vals.append(v^)
@@ -636,10 +679,25 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
                         row_vals.append(Value.of_null())
             else:
                 for v_idx in range(len(ins.values)):
-                    var v = eval_expr_row(ins.values[v_idx], empty_row, List[String]())
+                    var v = eval_expr_row(ins.values[v_idx], empty_row, List[String](), fn_registry=fn_reg)
                     if v_idx == pk_idx and not v.is_null():
                         explicit_rowid = Optional(v.to_int())
                     row_vals.append(v^)
+
+            if tbl_def.is_virtual:
+                var mod_idx = -1
+                for i in range(len(self.vtab_modules)):
+                    if nocase_compare(self.vtab_modules[i].module_name, tbl_def.virtual_module) == 0:
+                        mod_idx = i
+                        break
+                if mod_idx >= 0:
+                    var rowid = self.vtab_modules[mod_idx].update_insert(ins.table_name, row_vals)
+                    self.last_rowid = rowid
+                    self.change_count = 1
+                    self.total_change_count += 1
+                    return
+                else:
+                    raise Error("Virtual table module not found: " + tbl_def.virtual_module)
 
             var rowid = tbl_def.auto_rowid
             if explicit_rowid:
@@ -704,6 +762,7 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
 
         # 6. UPDATE
         elif st == STMT_UPDATE:
+            var fn_reg = Optional(self.fn_registry.copy())
             var upd = ast.update_stmt[0].copy()
             var tbl_opt = self.schema.find_table(upd.table_name)
             if not tbl_opt:
@@ -724,7 +783,7 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
 
                 var matches = True
                 if len(upd.where_expr) > 0:
-                    var w_res = eval_expr_row(upd.where_expr[0], row, col_names)
+                    var w_res = eval_expr_row(upd.where_expr[0], row, col_names, fn_registry=fn_reg)
                     if w_res.is_null() or w_res.to_int() == 0:
                         matches = False
 
@@ -736,7 +795,7 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
                     for s in range(len(upd.assignments)):
                         var col_name = upd.assignments[s].col_name
                         var expr = upd.assignments[s].expr
-                        var val = eval_expr_row(expr, row, col_names)
+                        var val = eval_expr_row(expr, row, col_names, fn_registry=fn_reg)
                         for c in range(len(col_names)):
                             if nocase_compare(col_names[c], col_name) == 0:
                                 new_vals[c] = val^
@@ -763,6 +822,7 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
 
         # 7. DELETE
         elif st == STMT_DELETE:
+            var fn_reg = Optional(self.fn_registry.copy())
             var del_stmt = ast.delete_stmt[0].copy()
             var tbl_opt = self.schema.find_table(del_stmt.table_name)
             if not tbl_opt:
@@ -774,6 +834,34 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
             for c in range(len(tbl_def.columns)):
                 col_names.append(tbl_def.columns[c].name)
 
+            if tbl_def.is_virtual:
+                var mod_idx = -1
+                for i in range(len(self.vtab_modules)):
+                    if nocase_compare(self.vtab_modules[i].module_name, tbl_def.virtual_module) == 0:
+                        mod_idx = i
+                        break
+                if mod_idx >= 0:
+                    var vtab_opt = self.vtab_modules[mod_idx].get_table(del_stmt.table_name)
+                    if vtab_opt:
+                        var vt = vtab_opt.value()
+                        var to_del = List[Int64]()
+                        for r_idx in range(len(vt.rows)):
+                            var r = vt.rows[r_idx]
+                            var matches = True
+                            if len(del_stmt.where_expr) > 0:
+                                var w_res = eval_expr_row(del_stmt.where_expr[0], r, col_names, fn_registry=fn_reg)
+                                if w_res.is_null() or w_res.to_int() == 0:
+                                    matches = False
+                            if matches:
+                                to_del.append(Int64(r_idx + 1))
+                        for d_i in range(len(to_del)):
+                            _ = self.vtab_modules[mod_idx].update_delete(del_stmt.table_name, to_del[d_i])
+                        self.change_count = len(to_del)
+                        self.total_change_count += len(to_del)
+                        return
+                else:
+                    raise Error("Virtual table module not found: " + tbl_def.virtual_module)
+
             var to_delete = List[Int64]()
             var n_cells = self.tables[btree_idx].cell_count()
 
@@ -784,7 +872,7 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
 
                 var matches = True
                 if len(del_stmt.where_expr) > 0:
-                    var w_res = eval_expr_row(del_stmt.where_expr[0], row, col_names)
+                    var w_res = eval_expr_row(del_stmt.where_expr[0], row, col_names, fn_registry=fn_reg)
                     if w_res.is_null() or w_res.to_int() == 0:
                         matches = False
 
@@ -923,6 +1011,25 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
             _ = self.schema.drop_trigger(dt.name)
             self.change_count = 0
 
+        # 15. CREATE VIRTUAL TABLE
+        elif st == STMT_CREATE_VIRTUAL_TABLE:
+            var cv = ast.create_virtual_table_stmt[0].copy()
+            var mod_idx = -1
+            for i in range(len(self.vtab_modules)):
+                if nocase_compare(self.vtab_modules[i].module_name, cv.module_name) == 0:
+                    mod_idx = i
+                    break
+            if mod_idx < 0:
+                self.vtab_modules.append(VirtualTableModule(cv.module_name))
+                mod_idx = len(self.vtab_modules) - 1
+            
+            var vtab = self.vtab_modules[mod_idx].create(cv.table_name, cv.arguments_str)
+            var tbl_def = TableDef(cv.table_name, -1, True, cv.module_name, cv.arguments_str)
+            for col_i in range(len(vtab.column_names)):
+                tbl_def.add_column(ColumnDef(vtab.column_names[col_i], SQLITE_TEXT))
+            self.schema.add_table(tbl_def^)
+            self.change_count = 0
+
     def _resolve_subqueries(mut self, mut expr: Expr) raises:
         """ Pre-evaluates any scalar subqueries inside an expression tree."""
         if expr.kind == EXPR_FUNC and expr.func_name == "SUBQUERY":
@@ -944,6 +1051,7 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
     def _execute_select_internal(mut self, sel: SelectStmt, mut out_rows: List[Row], mut out_col_names: List[String]) raises:
         """ Executes a SELECT query AST directly in pure Mojo."""
         var empty_row = Row(List[Value](), List[String]())
+        var fn_reg = Optional(self.fn_registry.copy())
 
         # Pre-resolve subqueries in WHERE clause if present
         var local_where = sel.where_expr.copy()
@@ -1047,7 +1155,7 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
             var res_vals = List[Value]()
             for c in range(len(sel.columns)):
                 var col = sel.columns[c]
-                var v = eval_expr_row(col.expr, empty_row, List[String]())
+                var v = eval_expr_row(col.expr, empty_row, List[String](), fn_registry=fn_reg)
                 res_vals.append(v^)
                 if col.col_alias != "":
                     out_col_names.append(col.col_alias)
@@ -1130,29 +1238,54 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
             if not tbl_opt:
                 raise Error("no such table: " + sel.table_name)
             var tbl_def = tbl_opt.value()
-            var btree_idx = tbl_def.btree_idx
-
-            var prefix = sel.table_alias if sel.table_alias != "" else sel.table_name
-            for c in range(len(tbl_def.columns)):
-                var cname = tbl_def.columns[c].name
-                if len(sel.joins) > 0:
-                    table_col_names.append(prefix + "." + cname)
+            if tbl_def.is_virtual:
+                var mod_idx = -1
+                for i in range(len(self.vtab_modules)):
+                    if nocase_compare(self.vtab_modules[i].module_name, tbl_def.virtual_module) == 0:
+                        mod_idx = i
+                        break
+                if mod_idx >= 0:
+                    var vtab_opt = self.vtab_modules[mod_idx].get_table(sel.table_name)
+                    if vtab_opt:
+                        var vt = vtab_opt.value()
+                        var prefix = sel.table_alias if sel.table_alias != "" else sel.table_name
+                        for c in range(len(vt.column_names)):
+                            var cname = vt.column_names[c]
+                            if len(sel.joins) > 0:
+                                table_col_names.append(prefix + "." + cname)
+                            else:
+                                table_col_names.append(cname)
+                        for r_idx in range(len(vt.rows)):
+                            var r = vt.rows[r_idx]
+                            var row_v = List[Value]()
+                            for c in range(len(r)):
+                                row_v.append(r[c].copy())
+                            candidate_rows.append(Row(row_v^, table_col_names.copy()))
                 else:
-                    table_col_names.append(cname)
-
-            var n_cells = self.tables[btree_idx].cell_count()
-
-            for i in range(n_cells):
-                var cell = self.tables[btree_idx].get_cell(i)
-                var raw_vals = decode_record(cell.payload)
-                while len(raw_vals) < len(tbl_def.columns):
-                    var c_idx = len(raw_vals)
-                    if tbl_def.columns[c_idx].has_default:
-                        raw_vals.append(tbl_def.columns[c_idx].default_value.copy())
+                    raise Error("Virtual table module not found: " + tbl_def.virtual_module)
+            else:
+                var btree_idx = tbl_def.btree_idx
+                var prefix = sel.table_alias if sel.table_alias != "" else sel.table_name
+                for c in range(len(tbl_def.columns)):
+                    var cname = tbl_def.columns[c].name
+                    if len(sel.joins) > 0:
+                        table_col_names.append(prefix + "." + cname)
                     else:
-                        raw_vals.append(Value.of_null())
-                var row = Row(raw_vals, table_col_names)
-                candidate_rows.append(row^)
+                        table_col_names.append(cname)
+
+                var n_cells = self.tables[btree_idx].cell_count()
+
+                for i in range(n_cells):
+                    var cell = self.tables[btree_idx].get_cell(i)
+                    var raw_vals = decode_record(cell.payload)
+                    while len(raw_vals) < len(tbl_def.columns):
+                        var c_idx = len(raw_vals)
+                        if tbl_def.columns[c_idx].has_default:
+                            raw_vals.append(tbl_def.columns[c_idx].default_value.copy())
+                        else:
+                            raw_vals.append(Value.of_null())
+                    var row = Row(raw_vals, table_col_names)
+                    candidate_rows.append(row^)
 
         # Process multi-table JOINs
         for j_idx in range(len(sel.joins)):
@@ -1199,7 +1332,7 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
                     var comb_row = Row(comb_vals^, new_table_col_names.copy())
                     var on_match = True
                     if len(join_cl.on_expr) > 0:
-                        var on_res = eval_expr_row(join_cl.on_expr[0], comb_row, new_table_col_names)
+                        var on_res = eval_expr_row(join_cl.on_expr[0], comb_row, new_table_col_names, fn_registry=fn_reg)
                         if on_res.is_null() or on_res.to_int() == 0:
                             on_match = False
                     if on_match:
@@ -1229,7 +1362,7 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
             var filtered_rows = List[Row]()
             for r in range(len(candidate_rows)):
                 var row = candidate_rows[r]
-                var w_res = eval_expr_row(local_where[0], row, table_col_names, alias_col_names, alias_exprs)
+                var w_res = eval_expr_row(local_where[0], row, table_col_names, alias_col_names, alias_exprs, fn_registry=fn_reg)
                 if not w_res.is_null() and w_res.to_int() != 0:
                     filtered_rows.append(row^)
             candidate_rows = filtered_rows^
@@ -1278,7 +1411,7 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
                             if expr.op == "DISTINCT":
                                 var dist_vals = List[String]()
                                 for r in range(len(candidate_rows)):
-                                    var v = eval_expr_row(expr.args[0], candidate_rows[r], table_col_names)
+                                    var v = eval_expr_row(expr.args[0], candidate_rows[r], table_col_names, fn_registry=fn_reg)
                                     if not v.is_null():
                                         var s_val = v.to_string()
                                         var exists = False
@@ -1292,7 +1425,7 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
                             else:
                                 var cnt = 0
                                 for r in range(len(candidate_rows)):
-                                    var v = eval_expr_row(expr.args[0], candidate_rows[r], table_col_names)
+                                    var v = eval_expr_row(expr.args[0], candidate_rows[r], table_col_names, fn_registry=fn_reg)
                                     if not v.is_null():
                                         cnt += 1
                                 agg_vals.append(Value.of_int(Int64(cnt)))
@@ -1304,14 +1437,14 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
                         else:
                             var sum_f: Float64 = 0.0
                             for r in range(len(candidate_rows)):
-                                var v = eval_expr_row(expr.args[0], candidate_rows[r], table_col_names)
+                                var v = eval_expr_row(expr.args[0], candidate_rows[r], table_col_names, fn_registry=fn_reg)
                                 if not v.is_null():
                                     sum_f += v.to_float()
                             agg_vals.append(Value.of_float(sum_f))
                     elif nocase_compare(fn_name, "TOTAL") == 0:
                         var tot_f: Float64 = 0.0
                         for r in range(len(candidate_rows)):
-                            var v = eval_expr_row(expr.args[0], candidate_rows[r], table_col_names)
+                            var v = eval_expr_row(expr.args[0], candidate_rows[r], table_col_names, fn_registry=fn_reg)
                             if not v.is_null():
                                 tot_f += v.to_float()
                         agg_vals.append(Value.of_float(tot_f))
@@ -1319,7 +1452,7 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
                         var sum_f: Float64 = 0.0
                         var count_non_null = 0
                         for r in range(len(candidate_rows)):
-                            var v = eval_expr_row(expr.args[0], candidate_rows[r], table_col_names)
+                            var v = eval_expr_row(expr.args[0], candidate_rows[r], table_col_names, fn_registry=fn_reg)
                             if not v.is_null():
                                 sum_f += v.to_float()
                                 count_non_null += 1
@@ -1330,7 +1463,7 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
                     elif nocase_compare(fn_name, "MIN") == 0:
                         var min_f: Optional[Float64] = None
                         for r in range(len(candidate_rows)):
-                            var v = eval_expr_row(expr.args[0], candidate_rows[r], table_col_names)
+                            var v = eval_expr_row(expr.args[0], candidate_rows[r], table_col_names, fn_registry=fn_reg)
                             if not v.is_null():
                                 var f = v.to_float()
                                 if not min_f or f < min_f.value():
@@ -1342,7 +1475,7 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
                     elif nocase_compare(fn_name, "MAX") == 0:
                         var max_f: Optional[Float64] = None
                         for r in range(len(candidate_rows)):
-                            var v = eval_expr_row(expr.args[0], candidate_rows[r], table_col_names)
+                            var v = eval_expr_row(expr.args[0], candidate_rows[r], table_col_names, fn_registry=fn_reg)
                             if not v.is_null():
                                 var f = v.to_float()
                                 if not max_f or f > max_f.value():
@@ -1354,11 +1487,11 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
                     elif nocase_compare(fn_name, "GROUP_CONCAT") == 0:
                         var sep = ","
                         if len(expr.args) >= 2:
-                            sep = eval_expr_row(expr.args[1], empty_row, List[String]()).to_string()
+                            sep = eval_expr_row(expr.args[1], empty_row, List[String](), fn_registry=fn_reg).to_string()
                         var g_str = String()
                         var first = True
                         for r in range(len(candidate_rows)):
-                            var v = eval_expr_row(expr.args[0], candidate_rows[r], table_col_names)
+                            var v = eval_expr_row(expr.args[0], candidate_rows[r], table_col_names, fn_registry=fn_reg)
                             if not v.is_null():
                                 if not first:
                                     g_str += sep
@@ -1366,7 +1499,7 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
                                 first = False
                         agg_vals.append(Value.of_text(g_str))
                 else:
-                    var v = eval_expr_row(expr, candidate_rows[0] if len(candidate_rows) > 0 else empty_row, table_col_names)
+                    var v = eval_expr_row(expr, candidate_rows[0] if len(candidate_rows) > 0 else empty_row, table_col_names, fn_registry=fn_reg)
                     agg_vals.append(v^)
 
             out_rows.append(Row(agg_vals^, out_col_names.copy()))
@@ -1417,7 +1550,7 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
                             var sum_f: Float64 = 0.0
                             for r in range(len(g_sub)):
                                 if len(expr.args) > 0:
-                                    var v = eval_expr_row(expr.args[0], g_sub[r], table_col_names)
+                                    var v = eval_expr_row(expr.args[0], g_sub[r], table_col_names, fn_registry=fn_reg)
                                     if not v.is_null():
                                         sum_f += v.to_float()
                             row_vals.append(Value.of_float(sum_f))
@@ -1425,7 +1558,7 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
                             if len(expr.args) > 0 and expr.args[0].kind != EXPR_STAR:
                                 var cnt = 0
                                 for r in range(len(g_sub)):
-                                    var v = eval_expr_row(expr.args[0], g_sub[r], table_col_names)
+                                    var v = eval_expr_row(expr.args[0], g_sub[r], table_col_names, fn_registry=fn_reg)
                                     if not v.is_null():
                                         cnt += 1
                                 row_vals.append(Value.of_int(Int64(cnt)))
@@ -1436,7 +1569,7 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
                             var cnt = 0
                             for r in range(len(g_sub)):
                                 if len(expr.args) > 0:
-                                    var v = eval_expr_row(expr.args[0], g_sub[r], table_col_names)
+                                    var v = eval_expr_row(expr.args[0], g_sub[r], table_col_names, fn_registry=fn_reg)
                                     if not v.is_null():
                                         sum_f += v.to_float()
                                         cnt += 1
@@ -1448,7 +1581,7 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
                             var min_f: Optional[Float64] = None
                             for r in range(len(g_sub)):
                                 if len(expr.args) > 0:
-                                    var v = eval_expr_row(expr.args[0], g_sub[r], table_col_names)
+                                    var v = eval_expr_row(expr.args[0], g_sub[r], table_col_names, fn_registry=fn_reg)
                                     if not v.is_null():
                                         var f = v.to_float()
                                         if not min_f or f < min_f.value():
@@ -1461,7 +1594,7 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
                             var max_f: Optional[Float64] = None
                             for r in range(len(g_sub)):
                                 if len(expr.args) > 0:
-                                    var v = eval_expr_row(expr.args[0], g_sub[r], table_col_names)
+                                    var v = eval_expr_row(expr.args[0], g_sub[r], table_col_names, fn_registry=fn_reg)
                                     if not v.is_null():
                                         var f = v.to_float()
                                         if not max_f or f > max_f.value():
@@ -1473,12 +1606,12 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
                         elif nocase_compare(fn_name, "GROUP_CONCAT") == 0:
                             var sep = ","
                             if len(expr.args) >= 2:
-                                sep = eval_expr_row(expr.args[1], empty_row, List[String]()).to_string()
+                                sep = eval_expr_row(expr.args[1], empty_row, List[String](), fn_registry=fn_reg).to_string()
                             var g_str = String()
                             var first = True
                             for r in range(len(g_sub)):
                                 if len(expr.args) > 0:
-                                    var v = eval_expr_row(expr.args[0], g_sub[r], table_col_names)
+                                    var v = eval_expr_row(expr.args[0], g_sub[r], table_col_names, fn_registry=fn_reg)
                                     if not v.is_null():
                                         if not first:
                                             g_str += sep
@@ -1486,13 +1619,13 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
                                         first = False
                             row_vals.append(Value.of_text(g_str))
                     else:
-                        var v = eval_expr_row(expr, g_sub[0], table_col_names)
+                        var v = eval_expr_row(expr, g_sub[0], table_col_names, fn_registry=fn_reg)
                         row_vals.append(v^)
                 
                 var out_row = Row(row_vals^, out_col_names.copy())
                 var pass_having = True
                 if len(sel.having_expr) > 0:
-                    var h_res = eval_expr_row(sel.having_expr[0], out_row, out_col_names)
+                    var h_res = eval_expr_row(sel.having_expr[0], out_row, out_col_names, fn_registry=fn_reg)
                     if h_res.is_null() or h_res.to_int() == 0:
                         pass_having = False
                 if pass_having:
@@ -1505,8 +1638,8 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
                 var n = len(out_rows)
                 for i in range(n):
                     for j in range(0, n - i - 1):
-                        var v1 = eval_expr_row(order_expr, out_rows[j], out_col_names)
-                        var v2 = eval_expr_row(order_expr, out_rows[j + 1], out_col_names)
+                        var v1 = eval_expr_row(order_expr, out_rows[j], out_col_names, fn_registry=fn_reg)
+                        var v2 = eval_expr_row(order_expr, out_rows[j + 1], out_col_names, fn_registry=fn_reg)
                         var swap = False
                         if v1.is_null() and not v2.is_null():
                             swap = is_desc
@@ -1539,8 +1672,8 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
                         for o in range(len(sel.order_by)):
                             var order_expr = sel.order_by[o]
                             var is_desc = order_expr.is_desc
-                            var v1 = eval_expr_row(order_expr, candidate_rows[j], table_col_names, alias_col_names, alias_exprs)
-                            var v2 = eval_expr_row(order_expr, candidate_rows[j + 1], table_col_names, alias_col_names, alias_exprs)
+                            var v1 = eval_expr_row(order_expr, candidate_rows[j], table_col_names, alias_col_names, alias_exprs, fn_registry=fn_reg)
+                            var v2 = eval_expr_row(order_expr, candidate_rows[j + 1], table_col_names, alias_col_names, alias_exprs, fn_registry=fn_reg)
                             if v1.is_null() and not v2.is_null():
                                 swap = is_desc
                                 break
@@ -1578,15 +1711,15 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
                             var p_end = len(candidate_rows)
                             if len(col.expr.window_partition) > 0:
                                 var p_expr = col.expr.window_partition[0]
-                                var cur_p_val = eval_expr_row(p_expr, row, table_col_names)
+                                var cur_p_val = eval_expr_row(p_expr, row, table_col_names, fn_registry=fn_reg)
                                 while p_start < r:
-                                    var v_start = eval_expr_row(p_expr, candidate_rows[p_start], table_col_names)
+                                    var v_start = eval_expr_row(p_expr, candidate_rows[p_start], table_col_names, fn_registry=fn_reg)
                                     if v_start.to_string() == cur_p_val.to_string():
                                         break
                                     p_start += 1
                                 p_end = p_start
                                 while p_end < len(candidate_rows):
-                                    var v_end = eval_expr_row(p_expr, candidate_rows[p_end], table_col_names)
+                                    var v_end = eval_expr_row(p_expr, candidate_rows[p_end], table_col_names, fn_registry=fn_reg)
                                     if v_end.to_string() != cur_p_val.to_string():
                                         break
                                     p_end += 1
@@ -1599,29 +1732,29 @@ struct Connection(ImplicitlyCopyable, Copyable, Movable):
                             elif nocase_compare(fn_name, "LEAD") == 0:
                                 var lead_offset = 1
                                 if len(col.expr.args) > 1:
-                                    var off_v = eval_expr_row(col.expr.args[1], row, table_col_names)
+                                    var off_v = eval_expr_row(col.expr.args[1], row, table_col_names, fn_registry=fn_reg)
                                     lead_offset = Int(off_v.to_int())
                                 var target_r = r + lead_offset
                                 if target_r < p_end and len(col.expr.args) > 0:
-                                    var lv = eval_expr_row(col.expr.args[0], candidate_rows[target_r], table_col_names)
+                                    var lv = eval_expr_row(col.expr.args[0], candidate_rows[target_r], table_col_names, fn_registry=fn_reg)
                                     row_vals.append(lv^)
                                 else:
                                     row_vals.append(Value.of_null())
                             elif nocase_compare(fn_name, "LAG") == 0:
                                 var lag_offset = 1
                                 if len(col.expr.args) > 1:
-                                    var off_v = eval_expr_row(col.expr.args[1], row, table_col_names)
+                                    var off_v = eval_expr_row(col.expr.args[1], row, table_col_names, fn_registry=fn_reg)
                                     lag_offset = Int(off_v.to_int())
                                 var target_r = r - lag_offset
                                 if target_r >= p_start and len(col.expr.args) > 0:
-                                    var lv = eval_expr_row(col.expr.args[0], candidate_rows[target_r], table_col_names)
+                                    var lv = eval_expr_row(col.expr.args[0], candidate_rows[target_r], table_col_names, fn_registry=fn_reg)
                                     row_vals.append(lv^)
                                 else:
                                     row_vals.append(Value.of_null())
                             else:
                                 row_vals.append(Value.of_int(Int64(row_offset_in_p + 1)))
                         else:
-                            var v = eval_expr_row(col.expr, row, table_col_names)
+                            var v = eval_expr_row(col.expr, row, table_col_names, fn_registry=fn_reg)
                             row_vals.append(v^)
                 out_rows.append(Row(row_vals^, out_col_names.copy()))
 

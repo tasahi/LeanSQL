@@ -18,6 +18,54 @@ from src.ext.protobuf import sql_pb_extract_int, sql_pb_extract_float, sql_pb_ex
 from src.ext.spatial import sql_st_point, sql_st_x, sql_st_y, sql_st_distance, sql_st_astext
 
 
+struct CustomScalarFunc(ImplicitlyCopyable, Copyable, Movable):
+    var func_ptr: def(List[Value]) thin -> Value
+
+    def __init__(out self, f: def(List[Value]) thin -> Value):
+        self.func_ptr = f
+
+    def __init__(out self, *, copy: Self):
+        self.func_ptr = copy.func_ptr
+
+    def __init__(out self, *, deinit move: Self):
+        self.func_ptr = move.func_ptr
+
+    def call(self, args: List[Value]) -> Value:
+        return self.func_ptr(args)
+
+
+struct FunctionRegistry(ImplicitlyCopyable, Copyable, Movable):
+    var names: List[String]
+    var funcs: List[CustomScalarFunc]
+
+    def __init__(out self):
+        self.names = List[String]()
+        self.funcs = List[CustomScalarFunc]()
+
+    def __init__(out self, *, copy: Self):
+        self.names = copy.names.copy()
+        self.funcs = copy.funcs.copy()
+
+    def __init__(out self, *, deinit move: Self):
+        self.names = move.names^
+        self.funcs = move.funcs^
+
+    def register(mut self, name: String, f: def(List[Value]) thin -> Value):
+        var csf = CustomScalarFunc(f)
+        for i in range(len(self.names)):
+            if nocase_compare(self.names[i], name) == 0:
+                self.funcs[i] = csf
+                return
+        self.names.append(name)
+        self.funcs.append(csf)
+
+    def lookup(self, name: String) -> Optional[CustomScalarFunc]:
+        for i in range(len(self.names)):
+            if nocase_compare(self.names[i], name) == 0:
+                return Optional(self.funcs[i])
+        return None
+
+
 def is_digit_char(c: UInt8) -> Bool:
     return c >= 48 and c <= 57
 
@@ -359,8 +407,14 @@ def sql_cast(val: Value, target_type: String) -> Value:
     return val.copy()
 
 
-def evaluate_scalar_func(name: String, args: List[Value]) -> Value:
+def evaluate_scalar_func( name: String, args: List[Value],
+        fn_registry: Optional[FunctionRegistry] = None ) -> Value:
     """ Dispatches scalar function execution by name."""
+    if fn_registry:
+        var custom_fn = fn_registry.value().lookup(name)
+        if custom_fn:
+            return custom_fn.value().call(args)
+
     if nocase_compare(name, "ABS") == 0:
         return sql_abs(args)
     elif nocase_compare(name, "LENGTH") == 0:

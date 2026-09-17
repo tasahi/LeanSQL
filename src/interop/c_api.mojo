@@ -7,6 +7,7 @@ from std.memory import Pointer
 from src.core.types import *
 from src.engine.connection import connect, Connection, Cursor
 from src.engine.row import Row, Value
+from src.engine.vtab import VirtualTableModule
 
 
 comptime VERSION_CSTR = "3.45.0 (LeanSQL Pure-Mojo Engine)"
@@ -131,6 +132,27 @@ struct CDatabaseContext(Copyable, Movable):
 
     def last_insert_rowid(self) -> Int64:
         return self.con.last_insert_rowid()
+
+    def load_extension(mut self, path: String, entrypoint: String = "sqlite3_extension_init") -> Int:
+        try:
+            self.con.load_extension(path, entrypoint)
+            self.err_code = SQLITE_OK
+            self.last_err = "not an error"
+            return SQLITE_OK
+        except e:
+            self.err_code = SQLITE_ERROR
+            self.last_err = String(e)
+            return SQLITE_ERROR
+
+    def register_function(mut self, name: String, f: def(List[Value]) thin -> Value) -> Int:
+        self.con.register_function(name, f)
+        self.err_code = SQLITE_OK
+        return SQLITE_OK
+
+    def register_vtab_module(mut self, name: String, mod: VirtualTableModule) -> Int:
+        self.con.register_module(name, mod)
+        self.err_code = SQLITE_OK
+        return SQLITE_OK
 
 
 def sqlite3_libversion() -> String:

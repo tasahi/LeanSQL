@@ -1,4 +1,6 @@
 from tests.harness import TestHarness
+from src.core.types import *
+from src.engine.row import Value, Row
 from src.interop.c_api import (
     sqlite3_libversion,
     sqlite3_sourceid,
@@ -9,6 +11,13 @@ from src.interop.c_api import (
     SQLITE_ROW,
     SQLITE_DONE,
 )
+
+
+def custom_triple(args: List[Value]) -> Value:
+    if len(args) == 0 or args[0].is_null():
+        return Value.of_null()
+    return Value.of_int(args[0].to_int() * 3)
+
 
 
 def run_c_abi_tests(mut h: TestHarness) raises:
@@ -66,6 +75,17 @@ def run_c_abi_tests(mut h: TestHarness) raises:
     stmt_sel.reset()
     var rc_reset_step = stmt_sel.step()
     h.assert_equal_int("cabi-1.6", rc_reset_step, SQLITE_ROW, "Step after reset yields first row again")
+
+    # 7. C-ABI Extension Loader & Custom Function Hook
+    var rc_ext = db.load_extension("libc.so.6")
+    h.assert_equal_int("cabi-1.7a", rc_ext, SQLITE_OK, "db.load_extension returns SQLITE_OK")
+
+    var rc_fn = db.register_function("triple_val", custom_triple)
+    h.assert_equal_int("cabi-1.7b", rc_fn, SQLITE_OK, "db.register_function returns SQLITE_OK")
+
+    var stmt_fn = db.prepare("SELECT triple_val(10) AS ans")
+    _ = stmt_fn.step()
+    h.assert_equal_int("cabi-1.7c", Int(stmt_fn.column_int64(0)), 30, "triple_val(10) returns 30 via C-ABI")
 
 
 def main() raises:

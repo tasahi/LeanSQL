@@ -27,6 +27,7 @@ status: active
 | :--- | :--- | :--- |
 | **[User's Reference Manual](reference_users.md)** | User-facing guide and operational manual. | CLI shell dot-commands (`.mode`, `.schema`, `.dump`), SQL syntax, transactions, and built-in function catalogs. |
 | **[Programmer's Reference Manual](reference_programmers.md)** | Subsystem decomposition and internal architecture. | Storage engine (`B-Tree`, `Pager`, `VFS`), Compiler (`Lexer`, `Parser`, `Optimizer`), and VDBE execution engine. |
+| **[Virtual Tables & Dynamic Extensions](virtual_tables_and_extensions.md)** | Virtual table subsystem, dynamic linking, and UDFs. | `CREATE VIRTUAL TABLE ... USING`, module registration (`VirtualTableModule`), dynamic library loader (`dlopen`/`dlsym`), and thin-pointer custom scalar functions. |
 | **[Composite & Binary Extensions](composite_binary_extensions.md)** | Structured composite types within SQLite BLOBs. | SQLite JSONB binary tree packing, MessagePack (`sqlite-msgpack`), Protobuf wire extraction (`sqlite_protobuf`), and OGC WKB 2D Point geometries (SpatiaLite). |
 | **[Gap Analysis & Future Roadmap](gap_analysis_and_future_roadmap.md)** | Architectural comparison against canonical C SQLite. | Parity matrix with `sqlite3.c`, test pass metrics, pure-Mojo advantages, and future development phases. |
 | **[Python C-Extension Export](python_c_extension_export.md)** | Native Python module compilation guide. | Building `leansql.so` via Mojo's `PythonModuleBuilder` and drop-in `leansql_driver.py` DB-API 2.0 interface. |

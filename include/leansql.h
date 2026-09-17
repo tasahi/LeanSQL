@@ -85,6 +85,73 @@ int sqlite3_exec(
     char **errmsg
 );
 
+/* Extension Loading and User-Defined Function Hooks */
+int sqlite3_load_extension(
+    sqlite3 *pDb,
+    const char *zFile,
+    const char *zProc,
+    char **pzErrMsg
+);
+
+typedef struct sqlite3_context sqlite3_context;
+typedef struct sqlite3_value sqlite3_value;
+
+typedef void (*sqlite3_scalar_func_callback)(
+    sqlite3_context *context,
+    int argc,
+    sqlite3_value **argv
+);
+
+int sqlite3_create_function(
+    sqlite3 *pDb,
+    const char *zFunctionName,
+    int nArg,
+    int eTextRep,
+    void *pApp,
+    sqlite3_scalar_func_callback xFunc,
+    void (*xStep)(sqlite3_context*,int,sqlite3_value**),
+    void (*xFinal)(sqlite3_context*)
+);
+
+/* Virtual Table Structs and Module Registration */
+typedef struct sqlite3_vtab sqlite3_vtab;
+typedef struct sqlite3_vtab_cursor sqlite3_vtab_cursor;
+typedef struct sqlite3_index_info sqlite3_index_info;
+
+struct sqlite3_vtab {
+    const struct sqlite3_module *pModule;
+    int nRef;
+    char *zErrMsg;
+};
+
+struct sqlite3_vtab_cursor {
+    sqlite3_vtab *pVtab;
+};
+
+typedef struct sqlite3_module {
+    int iVersion;
+    int (*xCreate)(sqlite3 *pDb, void *pAux, int argc, const char *const *argv, sqlite3_vtab **ppVTab, char **pzErr);
+    int (*xConnect)(sqlite3 *pDb, void *pAux, int argc, const char *const *argv, sqlite3_vtab **ppVTab, char **pzErr);
+    int (*xBestIndex)(sqlite3_vtab *pVTab, sqlite3_index_info *pIndexInfo);
+    int (*xDisconnect)(sqlite3_vtab *pVTab);
+    int (*xDestroy)(sqlite3_vtab *pVTab);
+    int (*xOpen)(sqlite3_vtab *pVTab, sqlite3_vtab_cursor **ppCursor);
+    int (*xClose)(sqlite3_vtab_cursor *pCursor);
+    int (*xFilter)(sqlite3_vtab_cursor *pCursor, int idxNum, const char *idxStr, int argc, sqlite3_value **argv);
+    int (*xNext)(sqlite3_vtab_cursor *pCursor);
+    int (*xEof)(sqlite3_vtab_cursor *pCursor);
+    int (*xColumn)(sqlite3_vtab_cursor *pCursor, sqlite3_context *pContext, int N);
+    int (*xRowid)(sqlite3_vtab_cursor *pCursor, int64_t *pRowid);
+    int (*xUpdate)(sqlite3_vtab *pVTab, int argc, sqlite3_value **argv, int64_t *pRowid);
+} sqlite3_module;
+
+int sqlite3_create_module(
+    sqlite3 *pDb,
+    const char *zName,
+    const sqlite3_module *pModule,
+    void *pClientData
+);
+
 #ifdef __cplusplus
 }
 #endif

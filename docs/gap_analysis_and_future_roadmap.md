@@ -55,6 +55,7 @@ The LeanSQL pure-Mojo database engine currently delivers 100% functional impleme
 | **Python DB-API Client** | `test_sqlite3.py` / `sqlite3` | `leansql_driver.py`, `src/interop/py_export.mojo`, `leansql.so` | **Full Parity**: Python standard library drop-in replacement (`connect()`, `Connection`, `Cursor`, `Row`, `OperationalError`). |
 | **Full-Text Search (FTS)** | `fts5` / `leansql-text` | `src/ext/fts.mojo` | **Full Parity**: Alphanumeric tokenization, case-folding, `fts_match`, BM25 relevance ranking, `highlight()`, `snippet()`. |
 | **SIMD Vector Search** | `sqlite-vec` / `leansql-vector` | `src/ext/vector.mojo` | **Full Parity**: Float vector parsing, Cosine distance, Euclidean (L2) distance, Dot product, KNN nearest-neighbor search. |
+| **Virtual Tables & Extension Loader** | `vtab.c`, `os.c` | `src/engine/vtab.mojo`, `src/engine/connection.mojo`, `src/engine/functions.mojo` | **Full Parity**: `CREATE VIRTUAL TABLE ... USING`, `VirtualTableModule`, `VirtualTableCursor`, `IndexConstraint`, `load_extension` (`dlopen`/`dlsym`), and `register_function`. |
 | **Math & Crypto Extensions** | `leansql/math`, `leansql/crypto` | `src/ext/crypto.mojo`, `src/engine/functions.mojo` | **Full Parity**: 17 trigonometry/log/power/rounding math functions, `md5`, `sha256`, `hex`, `unhex`. |
 
 ---
@@ -68,17 +69,12 @@ The following represents edge cases, optional concurrency modes, and advanced pl
 - **C SQLite Equivalent**: `wal.c` / `wal.h` provides an alternate Write-Ahead Logging mode (`PRAGMA journal_mode=WAL`) using `-wal` index frame files and shared memory (`-shm`) to enable concurrent readers while a write transaction is in progress.
 - **Priority**: Low/Medium (Rollback journaling provides complete ACID safety; WAL is an optimization for multi-process reader/writer concurrency).
 
-### Gap 2: Dynamic Third-Party C-Extension Loading (`sqlite3_load_extension`)
-- **Current State in Mojo**: All LeanSQL extensions (Full-Text Search, SIMD Vector Similarity, Math, Cryptography, File I/O, Schema Introspection) are natively integrated into the pure Mojo engine.
-- **C SQLite Equivalent**: `sqlite3_load_extension()` allows dynamically loading third-party compiled `.dll` or `.so` files at runtime and registering virtual tables via `sqlite3_create_module()`.
-- **Priority**: Low (Native Mojo extensions provide superior SIMD performance and memory safety without external C binaries).
-
-### Gap 3: Hex Literal Token Syntax (`X'4D6F6A6F'`)
+### Gap 2: Hex Literal Token Syntax (`X'4D6F6A6F'`)
 - **Current State in Mojo**: Hexadecimal encoding and decoding are fully supported via `hex('Mojo')` and `unhex('4D6F6A6F')`.
 - **C SQLite Equivalent**: SQL tokenizer recognizes raw hex string literals prefixed with `X'...'` or `x'...'`.
 - **Priority**: Low.
 
-### Gap 4: Custom Collation Sequence Callbacks (`sqlite3_create_collation`)
+### Gap 3: Custom Collation Sequence Callbacks (`sqlite3_create_collation`)
 - **Current State in Mojo**: Collation is handled case-insensitively via `nocase_compare` and standard string comparison.
 - **C SQLite Equivalent**: C applications can register dynamic custom collation callbacks (e.g. locale-specific ICU collations).
 - **Priority**: Low.

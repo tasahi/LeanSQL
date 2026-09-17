@@ -110,6 +110,18 @@ def leansql_commit(target_obj: PythonObject) raises -> PythonObject:
     return PythonObject(True)
 
 
+def leansql_load_extension(target_obj: PythonObject, path_obj: PythonObject, entrypoint_obj: PythonObject = PythonObject("sqlite3_extension_init")) raises -> PythonObject:
+    """ Dynamically loads a shared library extension on the target connection."""
+    var addr = parse_handle_address(target_obj)
+    var path_str = String(path_obj)
+    var entry_str = String(entrypoint_obj)
+    if addr != 0:
+        var p = Pointer[Connection, MutAnyOrigin](unsafe_from_address=addr)
+        p[].load_extension(path_str, entry_str)
+        return PythonObject(True)
+    return PythonObject(False)
+
+
 def leansql_close(target_obj: PythonObject) raises -> PythonObject:
     """ Closes connection handle."""
     var addr = parse_handle_address(target_obj)
@@ -131,6 +143,7 @@ def PyInit_leansql() abi("C") -> PythonObject:
         mb.def_function[leansql_execute]("execute", "Executes SQL DDL/DML statement")
         mb.def_function[leansql_fetch_all]("fetch_all", "Executes SQL query and returns Python list of tuples")
         mb.def_function[leansql_commit]("commit", "Commits active transaction")
+        mb.def_function[leansql_load_extension]("load_extension", "Loads external shared library extension")
         mb.def_function[leansql_close]("close", "Closes connection handle")
         return mb.finalize()
     except:

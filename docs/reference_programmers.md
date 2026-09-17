@@ -65,7 +65,13 @@ The LeanSQL architecture faithfully implements the layered SQLite database engin
 
 ### E. Connection & Evaluation (`src/engine/connection.mojo`, `src/engine/cursor.mojo`, `src/engine/schema.mojo`, `src/engine/functions.mojo`)
 - **Connection (`Connection`, `Cursor`)**: Central query dispatcher managing catalog state, transactions, savepoints, multi-table JOINs, subqueries, recursive CTEs, window functions, and triggers.
-- **Functions (`evaluate_scalar_func`)**: Scalar dispatch table supporting built-in and extended functions.
+- **Functions (`evaluate_scalar_func`, `FunctionRegistry`)**: Scalar dispatch table supporting built-in and user-defined custom functions (`register_function`).
+
+### F. Virtual Table Subsystem & Dynamic Linking (`src/engine/vtab.mojo`)
+- **`VirtualTableModule`**: Factory interface for creating and connecting to virtual tables.
+- **`VirtualTable`**: Virtual table instance interface managing index analysis (`best_index`), cursor creation (`open_cursor`), and row mutations (`insert_row`, `delete_row`).
+- **`VirtualTableCursor`**: Stateful cursor abstraction (`filter`, `next`, `eof`, `column_value`, `rowid`).
+- **`DynamicLibrary`**: Platform runtime shared library loader implementing `dlopen`, `dlsym`, `dlclose`, and `dlerror` via Mojo FFI.
 
 ---
 

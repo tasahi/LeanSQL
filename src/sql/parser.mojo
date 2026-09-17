@@ -109,6 +109,8 @@ from src.sql.tokenizer import (
     TK_ROW,
     TK_ARROW,
     TK_ARROW_TEXT,
+    TK_VIRTUAL,
+    TK_USING,
     TK_END,
     TK_EOF,
 )
@@ -716,6 +718,37 @@ struct CreateTriggerStmt(ImplicitlyCopyable, Copyable, Movable):
         pass
 
 
+comptime STMT_CREATE_VIRTUAL_TABLE = 16
+
+
+struct CreateVirtualTableStmt(ImplicitlyCopyable, Copyable, Movable):
+    var table_name: String
+    var module_name: String
+    var arguments_str: String
+    var columns: List[ColumnDef]
+
+    def __init__(out self, table_name: String, module_name: String, arguments_str: String = ""):
+        self.table_name = table_name
+        self.module_name = module_name
+        self.arguments_str = arguments_str
+        self.columns = List[ColumnDef]()
+
+    def __init__(out self, *, copy: Self):
+        self.table_name = copy.table_name
+        self.module_name = copy.module_name
+        self.arguments_str = copy.arguments_str
+        self.columns = copy.columns.copy()
+
+    def __init__(out self, *, deinit move: Self):
+        self.table_name = move.table_name^
+        self.module_name = move.module_name^
+        self.arguments_str = move.arguments_str^
+        self.columns = move.columns^
+
+    def __deinit__(deinit self):
+        pass
+
+
 struct DropTriggerStmt(ImplicitlyCopyable, Copyable, Movable):
     var name: String
 
@@ -748,6 +781,7 @@ struct ASTStatement(ImplicitlyCopyable, Copyable, Movable):
     var drop_view_stmt: List[DropViewStmt]
     var create_trigger_stmt: List[CreateTriggerStmt]
     var drop_trigger_stmt: List[DropTriggerStmt]
+    var create_virtual_table_stmt: List[CreateVirtualTableStmt]
 
     def __init__(out self, stmt_type: Int):
         self.stmt_type = stmt_type
@@ -765,6 +799,7 @@ struct ASTStatement(ImplicitlyCopyable, Copyable, Movable):
         self.drop_view_stmt = List[DropViewStmt]()
         self.create_trigger_stmt = List[CreateTriggerStmt]()
         self.drop_trigger_stmt = List[DropTriggerStmt]()
+        self.create_virtual_table_stmt = List[CreateVirtualTableStmt]()
 
     def __init__(out self, *, copy: Self):
         self.stmt_type = copy.stmt_type
@@ -782,6 +817,7 @@ struct ASTStatement(ImplicitlyCopyable, Copyable, Movable):
         self.drop_view_stmt = copy.drop_view_stmt.copy()
         self.create_trigger_stmt = copy.create_trigger_stmt.copy()
         self.drop_trigger_stmt = copy.drop_trigger_stmt.copy()
+        self.create_virtual_table_stmt = copy.create_virtual_table_stmt.copy()
 
     def __init__(out self, *, deinit move: Self):
         self.stmt_type = move.stmt_type
@@ -799,6 +835,7 @@ struct ASTStatement(ImplicitlyCopyable, Copyable, Movable):
         self.drop_view_stmt = move.drop_view_stmt^
         self.create_trigger_stmt = move.create_trigger_stmt^
         self.drop_trigger_stmt = move.drop_trigger_stmt^
+        self.create_virtual_table_stmt = move.create_virtual_table_stmt^
 
     def __deinit__(deinit self):
         pass
@@ -1530,6 +1567,45 @@ def parse_sql(tokens: List[Token]) raises -> ASTStatement:
         if pos < len(tokens) and tokens[pos].token_type == TK_UNIQUE:
             is_unique_idx = True
             pos += 1
+
+        if pos < len(tokens) and tokens[pos].token_type == TK_VIRTUAL:
+            pos += 1
+            if pos < len(tokens) and tokens[pos].token_type == TK_TABLE:
+                pos += 1
+            var tbl_name = String()
+            if pos < len(tokens) and tokens[pos].token_type == TK_ID:
+                tbl_name = tokens[pos].text
+                pos += 1
+            var mod_name = String()
+            if pos < len(tokens) and tokens[pos].token_type == TK_USING:
+                pos += 1
+                if pos < len(tokens) and tokens[pos].token_type == TK_ID:
+                    mod_name = tokens[pos].text
+                    pos += 1
+            var raw_args = String()
+            var v_stmt = CreateVirtualTableStmt(tbl_name, mod_name)
+            if pos < len(tokens) and tokens[pos].token_type == TK_LP:
+                pos += 1
+                var depth = 1
+                while pos < len(tokens) and depth > 0 and tokens[pos].token_type != TK_SEMI and tokens[pos].token_type != TK_EOF:
+                    if tokens[pos].token_type == TK_LP:
+                        depth += 1
+                    elif tokens[pos].token_type == TK_RP:
+                        depth -= 1
+                        if depth == 0:
+                            pos += 1
+                            break
+                    var t_text = tokens[pos].text
+                    if tokens[pos].token_type == TK_STRING:
+                        t_text = "'" + t_text + "'"
+                    if raw_args != "" and t_text != "," and t_text != ")" and t_text != "(":
+                        raw_args += " "
+                    raw_args += t_text
+                    pos += 1
+            v_stmt.arguments_str = raw_args
+            var res_stmt = ASTStatement(STMT_CREATE_VIRTUAL_TABLE)
+            res_stmt.create_virtual_table_stmt.append(v_stmt^)
+            return res_stmt^
 
         if pos < len(tokens) and tokens[pos].token_type == TK_TABLE:
             pos += 1

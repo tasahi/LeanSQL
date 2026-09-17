@@ -107,6 +107,20 @@ class Connection:
     def rollback(self):
         pass
 
+    def enable_load_extension(self, enabled: bool):
+        """Toggles extension loading permission (DB-API compatibility)."""
+        self._load_extension_enabled = enabled
+
+    def load_extension(self, path: str, entrypoint: str = "sqlite3_extension_init"):
+        """Loads a compiled C/C++ or Mojo extension module dynamically."""
+        if hasattr(self, "_handle"):
+            try:
+                res = leansql.load_extension(self._handle, path, entrypoint)
+                if not res:
+                    raise OperationalError(f"Failed to load extension: {path}")
+            except Exception as e:
+                raise OperationalError(str(e))
+
     def close(self):
         if hasattr(self, "_handle"):
             try:

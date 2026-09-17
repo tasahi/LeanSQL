@@ -108,6 +108,8 @@ comptime TK_EACH = 224
 comptime TK_ROW = 225
 comptime TK_ARROW = 226
 comptime TK_ARROW_TEXT = 227
+comptime TK_VIRTUAL = 228
+comptime TK_USING = 229
 comptime TK_EOF = 199
 
 
@@ -424,6 +426,10 @@ def tokenize_sql(sql: String) raises -> List[Token]:
                 tokens.append(Token(TK_EACH, word))
             elif nocase_compare(word, "ROW") == 0:
                 tokens.append(Token(TK_ROW, word))
+            elif nocase_compare(word, "VIRTUAL") == 0:
+                tokens.append(Token(TK_VIRTUAL, word))
+            elif nocase_compare(word, "USING") == 0:
+                tokens.append(Token(TK_USING, word))
             elif nocase_compare(word, "END") == 0:
                 tokens.append(Token(TK_END, word))
             else:

@@ -71,6 +71,10 @@ DROP VIEW v_top_users;
 ALTER TABLE users RENAME TO members;
 ALTER TABLE members ADD COLUMN role TEXT DEFAULT 'Member';
 ALTER TABLE members RENAME COLUMN role TO title;
+
+-- Virtual Tables
+CREATE VIRTUAL TABLE v_items USING simple_mod(id INT, label TEXT, score REAL);
+DROP TABLE v_items;
 ```
 
 ### B. Data Manipulation Language (DML)
